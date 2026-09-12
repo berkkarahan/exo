@@ -7,13 +7,13 @@ import os
 import sys
 from collections.abc import Callable, Iterable, Mapping
 from multiprocessing.process import BaseProcess
-from multiprocessing.resource_sharer import DupFd
-from typing import final
+from typing import Protocol, TextIO, cast, final
 
 from anyio import (
     TASK_STATUS_IGNORED,
     BrokenResourceError,
     CancelScope,
+    CapacityLimiter,
     ClosedResourceError,
     Event,
     create_task_group,
@@ -28,12 +28,43 @@ from loguru import logger
 from exo.utils import STDERR_FD, STDIO_FDS, STDOUT_FD
 from exo.utils.channels import Receiver, Sender, channel
 
+if sys.platform == "win32":
+    import _winapi
+    import io
+    import msvcrt
+    from multiprocessing.context import get_spawning_popen
+else:
+    from multiprocessing.resource_sharer import DupFd
+
 _READ_CHUNK_SIZE = 64 * 1024
+_WINDOWS_PIPE_POLL_INTERVAL_SECONDS = 0.05
 _JOIN_GRACE_SECONDS = 3.0
 _TERMINATE_GRACE_SECONDS = 5.0
 _TERMINATE_RETRY_GRACE_SECONDS = 2.0
 _TERMINATE_ATTEMPTS = 10
 _KILL_GRACE_SECONDS = 2.0
+
+
+class _SupportsDetach(Protocol):
+    def detach(self) -> int: ...
+
+
+class _SpawningPopen(Protocol):
+    def duplicate_for_child(self, handle: int) -> int: ...
+
+
+if sys.platform == "win32":
+
+    @final
+    class _WindowsChildHandle:
+        def __init__(self, handle: int) -> None:
+            self._handle = handle
+
+        def __reduce__(self) -> tuple[type[int], tuple[int]]:
+            spawning_popen = cast(_SpawningPopen | None, get_spawning_popen())
+            if spawning_popen is None:
+                raise RuntimeError("pipe handle can only be serialized while spawning")
+            return int, (spawning_popen.duplicate_for_child(self._handle),)
 
 
 @final
@@ -87,12 +118,27 @@ class AsyncProcess:
                 stdout_read_fd, stdout_write_fd = os.pipe()
                 stderr_read_fd, stderr_write_fd = os.pipe()
 
+                if sys.platform == "win32":
+                    drain_fd = _drain_fd_windows
+                    child_target: Callable[..., None] = _run_with_captured_stdio_windows
+                    stdout_child_argument: object = _WindowsChildHandle(
+                        msvcrt.get_osfhandle(stdout_write_fd)
+                    )
+                    stderr_child_argument: object = _WindowsChildHandle(
+                        msvcrt.get_osfhandle(stderr_write_fd)
+                    )
+                else:
+                    drain_fd = _drain_fd
+                    child_target = _run_with_captured_stdio
+                    stdout_child_argument = DupFd(stdout_write_fd)
+                    stderr_child_argument = DupFd(stderr_write_fd)
+
                 process = mp.Process(
-                    target=_run_with_captured_stdio,
+                    target=child_target,
                     name=self._name,
                     args=(
-                        DupFd(stdout_write_fd),
-                        DupFd(stderr_write_fd),
+                        stdout_child_argument,
+                        stderr_child_argument,
                         self._target,
                         *self._args,
                     ),
@@ -113,12 +159,16 @@ class AsyncProcess:
                 self._started.set()
 
                 async with create_task_group() as tg:
-                    tg.start_soon(_drain_fd, stdout_read_fd, self._stdout_tx)
-                    stdout_read_fd = None
-                    tg.start_soon(_drain_fd, stderr_read_fd, self._stderr_tx)
-                    stderr_read_fd = None
-                    task_status.started()
-                    await self.wait()
+                    try:
+                        tg.start_soon(drain_fd, stdout_read_fd, self._stdout_tx)
+                        stdout_read_fd = None
+                        tg.start_soon(drain_fd, stderr_read_fd, self._stderr_tx)
+                        stderr_read_fd = None
+                        task_status.started()
+                        await self.wait()
+                    finally:
+                        with CancelScope(shield=True):
+                            await self._terminate_if_still_alive()
         except BaseException as exc:
             if not self._started.is_set():
                 self._start_error = exc
@@ -245,8 +295,8 @@ class AsyncProcess:
 
 # Spawn-mode multiprocessing requires a module-level target that can be pickled.
 def _run_with_captured_stdio(
-    stdout: DupFd,
-    stderr: DupFd,
+    stdout: _SupportsDetach,
+    stderr: _SupportsDetach,
     target: Callable[..., object] | None,
     *target_args: object,
     **target_kwargs: object,
@@ -287,3 +337,111 @@ def _close_fd(fd: int | None) -> None:
         return
     with contextlib.suppress(OSError):
         os.close(fd)
+
+
+if sys.platform == "win32":
+
+    def _peek_named_pipe_chunk(fd: int) -> bytes | None:
+        pipe_handle = msvcrt.get_osfhandle(fd)
+        try:
+            peek_result = _winapi.PeekNamedPipe(pipe_handle, 0)
+        except OSError as error:
+            if error.winerror == _winapi.ERROR_BROKEN_PIPE:
+                return b""
+            raise
+        # CPython's actual runtime return for size=0 is always the 2-tuple
+        # (available, bytes_left_this_message); the stub types it as a union
+        # with the 3-tuple size>0 shape, so narrow by length to satisfy the
+        # type checker instead of indexing blindly.
+        if len(peek_result) != 2:
+            raise RuntimeError(f"unexpected PeekNamedPipe(size=0) result: {peek_result!r}")
+        available, _bytes_left_this_message = peek_result
+        if available == 0:
+            return None
+        return os.read(fd, min(available, _READ_CHUNK_SIZE))
+
+    async def _drain_fd_windows(fd: int, tx: Sender[bytes]) -> None:
+        # abandon_on_cancel=False (unlike channels.py:269,348) shields this
+        # wait, so cancellation blocks until the in-flight peek/read returns
+        # rather than abandoning the worker thread. That's safe here because
+        # each call is bounded (one non-blocking PeekNamedPipe plus a sized
+        # os.read), and it guarantees no thread still touches fd when finally
+        # closes it.
+        limiter = CapacityLimiter(1)
+        try:
+            while True:
+                chunk = await to_thread.run_sync(
+                    _peek_named_pipe_chunk, fd, limiter=limiter, abandon_on_cancel=False
+                )
+                if chunk is None:
+                    await sleep(_WINDOWS_PIPE_POLL_INTERVAL_SECONDS)
+                    continue
+                if not chunk:
+                    return
+                await tx.send(chunk)
+        except (BrokenPipeError, BrokenResourceError, ClosedResourceError):
+            pass
+        finally:
+            _close_fd(fd)
+            await tx.aclose()
+
+    def _fd_from_native_handle(handle: int) -> int:
+        try:
+            return msvcrt.open_osfhandle(handle, os.O_WRONLY | os.O_BINARY)
+        except OSError:
+            _winapi.CloseHandle(handle)
+            raise
+
+    def _rebuild_text_stream(
+        fd: int, template: TextIO, *, line_buffered: bool
+    ) -> io.TextIOWrapper:
+        raw = io.FileIO(fd, mode="w", closefd=False)
+        return io.TextIOWrapper(
+            io.BufferedWriter(raw),
+            encoding=template.encoding,
+            errors=template.errors or "strict",
+            newline="\n",
+            line_buffering=line_buffered,
+            write_through=line_buffered,
+        )
+
+    def _run_with_captured_stdio_windows(
+        stdout_handle: int,
+        stderr_handle: int,
+        target: Callable[..., object] | None,
+        *target_args: object,
+        **target_kwargs: object,
+    ) -> None:
+        stdout_fd = _fd_from_native_handle(stdout_handle)
+        stderr_fd = _fd_from_native_handle(stderr_handle)
+
+        try:
+            os.dup2(stdout_fd, STDOUT_FD)
+            os.dup2(stderr_fd, STDERR_FD)
+        finally:
+            for fd in (stdout_fd, stderr_fd):
+                if fd not in STDIO_FDS:
+                    _close_fd(fd)
+
+        old_stdout, old_stderr = sys.stdout, sys.stderr
+        for old_stream in (old_stdout, old_stderr):
+            with contextlib.suppress(Exception):
+                old_stream.flush()
+
+        # A parent launched from a real console gives the child TextIOWrapper
+        # streams backed by _WindowsConsoleIO, which writes via WriteConsoleW.
+        # After dup2 rewires fd 1/2 onto our pipe, WriteConsoleW is invalid for
+        # that handle and print() raises instead of being captured
+        # (https://bugs.python.org/issue30555). Unconditionally rebuild
+        # stdout/stderr over a generic FileIO so they can never be
+        # console-backed.
+        sys.stdout = sys.__stdout__ = _rebuild_text_stream(
+            STDOUT_FD, old_stdout, line_buffered=False
+        )
+        sys.stderr = sys.__stderr__ = _rebuild_text_stream(
+            STDERR_FD, old_stderr, line_buffered=True
+        )
+
+        faulthandler.enable(file=sys.stderr, all_threads=True)
+        if target is not None:
+            target(*target_args, **target_kwargs)
