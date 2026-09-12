@@ -39,6 +39,7 @@ from .system_info import (
     get_os_build_version,
     get_os_version,
 )
+from .windows_gpu import has_directml_adapter as _has_directml_adapter
 
 IS_DARWIN = sys.platform == "darwin"
 
@@ -374,6 +375,14 @@ class NodeBackends(TaggedModel):
 
     @classmethod
     async def gather(cls) -> Self:
+        if sys.platform == "win32":
+            windows_backends: list[Backend] = [Backend.OnnxCpu]
+            if await to_thread.run_sync(_has_directml_adapter):
+                windows_backends.append(Backend.OnnxDirectMl)
+            if await to_thread.run_sync(_has_nvml_cuda):
+                windows_backends.append(Backend.OnnxCuda)
+            return cls(backends=windows_backends)
+
         backends: list[Backend] = [Backend.MlxCpu]
         if IS_DARWIN:
             backends.append(Backend.MlxMetal)

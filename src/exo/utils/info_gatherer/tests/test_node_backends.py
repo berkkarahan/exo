@@ -1,0 +1,84 @@
+from unittest import mock
+
+from exo.shared.types.backends import Backend
+from exo.utils.info_gatherer import info_gatherer, windows_gpu
+
+
+async def test_windows_backends_when_directml_present_and_no_nvidia():
+    with (
+        mock.patch.object(info_gatherer.sys, "platform", "win32"),
+        mock.patch.object(info_gatherer, "_has_directml_adapter", lambda: True),
+        mock.patch.object(info_gatherer, "_has_nvml_cuda", lambda: False),
+    ):
+        result = await info_gatherer.NodeBackends.gather()
+    assert result.backends == [Backend.OnnxCpu, Backend.OnnxDirectMl]
+
+
+async def test_windows_backends_when_directml_and_nvidia_both_present():
+    with (
+        mock.patch.object(info_gatherer.sys, "platform", "win32"),
+        mock.patch.object(info_gatherer, "_has_directml_adapter", lambda: True),
+        mock.patch.object(info_gatherer, "_has_nvml_cuda", lambda: True),
+    ):
+        result = await info_gatherer.NodeBackends.gather()
+    assert result.backends == [Backend.OnnxCpu, Backend.OnnxDirectMl, Backend.OnnxCuda]
+
+
+async def test_windows_backends_when_no_gpu_falls_back_to_cpu_only():
+    with (
+        mock.patch.object(info_gatherer.sys, "platform", "win32"),
+        mock.patch.object(info_gatherer, "_has_directml_adapter", lambda: False),
+        mock.patch.object(info_gatherer, "_has_nvml_cuda", lambda: False),
+    ):
+        result = await info_gatherer.NodeBackends.gather()
+    assert result.backends == [Backend.OnnxCpu]
+
+
+async def test_windows_backends_when_directml_probe_raises_does_not_propagate():
+    def _raising_probe() -> bool:
+        raise RuntimeError("dxgi probe blew up")
+
+    with (
+        mock.patch.object(info_gatherer.sys, "platform", "win32"),
+        mock.patch.object(windows_gpu, "_probe_directml_adapter", _raising_probe),
+        mock.patch.object(info_gatherer, "_has_nvml_cuda", lambda: False),
+    ):
+        result = await info_gatherer.NodeBackends.gather()
+    assert Backend.OnnxCpu in result.backends
+    assert Backend.OnnxDirectMl not in result.backends
+
+
+async def test_windows_backends_contain_no_mlx_or_vllm_members():
+    with (
+        mock.patch.object(info_gatherer.sys, "platform", "win32"),
+        mock.patch.object(info_gatherer, "_has_directml_adapter", lambda: True),
+        mock.patch.object(info_gatherer, "_has_nvml_cuda", lambda: True),
+    ):
+        result = await info_gatherer.NodeBackends.gather()
+    assert Backend.MlxCpu not in result.backends
+    assert Backend.MlxMetal not in result.backends
+    assert Backend.MlxCuda not in result.backends
+    assert Backend.Vllm not in result.backends
+
+
+async def test_darwin_backends_unchanged():
+    with (
+        mock.patch.object(info_gatherer.sys, "platform", "darwin"),
+        mock.patch.object(info_gatherer, "IS_DARWIN", True),
+        mock.patch.object(info_gatherer, "_has_nvml_cuda", lambda: False),
+    ):
+        result = await info_gatherer.NodeBackends.gather()
+    assert Backend.MlxCpu in result.backends
+    assert Backend.MlxMetal in result.backends
+    assert not any(b.value.startswith("Onnx") for b in result.backends)
+
+
+async def test_linux_backends_unchanged():
+    with (
+        mock.patch.object(info_gatherer.sys, "platform", "linux"),
+        mock.patch.object(info_gatherer, "IS_DARWIN", False),
+        mock.patch.object(info_gatherer, "_has_nvml_cuda", lambda: False),
+    ):
+        result = await info_gatherer.NodeBackends.gather()
+    assert Backend.MlxCpu in result.backends
+    assert not any(b.value.startswith("Onnx") for b in result.backends)
