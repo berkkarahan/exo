@@ -7,9 +7,11 @@
 mod allow_threading;
 // mod ident;
 mod networking;
+#[cfg(unix)]
 mod pidfile;
 
 use crate::networking::networking_submodule;
+#[cfg(unix)]
 use crate::pidfile::pidfile_submodule;
 use pyo3::prelude::PyModule;
 use pyo3::{Bound, PyResult, pymodule};
@@ -157,6 +159,7 @@ fn main_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // TODO: for now this is all NOT a submodule, but figure out how to make the submodule system
     //       work with maturin, where the types generate correctly, in the right folder, without
     //       too many importing issues...
+    #[cfg(unix)]
     pidfile_submodule(m)?;
     // m.add_class::<PyKeypair>()?;
     networking_submodule(m)?;

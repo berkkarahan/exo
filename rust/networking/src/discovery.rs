@@ -7,6 +7,7 @@ use std::{
 
 use bytemuck::{Pod, Zeroable};
 use log::{debug, trace, warn};
+#[cfg(unix)]
 use netwatcher::WatchHandle;
 use parking_lot::Mutex;
 use tokio::{
@@ -27,6 +28,7 @@ pub struct Discovery {
     listen_port: u16,
     zid: ZenohId,
     tick: Interval,
+    #[cfg(unix)]
     _sync: Mutex<WatchHandle>,
 }
 
@@ -56,55 +58,61 @@ impl Discovery {
         sock.set_multicast_loop_v6(true)?;
         let sock = Arc::new(UdpSocket::from_std(sock.into())?);
         let ifaces: Arc<Mutex<Vec<SocketAddrV6>>> = Default::default();
-        let _sync = Mutex::new(
-            netwatcher::watch_interfaces_with_callback({
-                let sock = sock.clone();
-                let ifaces = ifaces.clone();
-                move |update| {
-                    for (iface_idx, iface) in update.interfaces.iter() {
-                        if iface
-                            .ipv6_ips()
-                            .all(|addr| addr.is_loopback() || addr.is_unspecified())
-                        {
-                            continue;
-                        }
-
-                        match sock.join_multicast_v6(&GROUP, *iface_idx) {
-                            Ok(()) => ifaces.lock().push(SocketAddrV6::new(
-                                GROUP,
-                                discovery_port,
-                                0,
-                                *iface_idx,
-                            )),
-                            Err(e) if e.kind() != io::ErrorKind::AddrInUse => {
-                                // skip AddrInUse - just means we've already joined the mv6
-                                if let Some(iface) = update.interfaces.get(&iface_idx) {
-                                    warn!(
-                                        "failed to join multicast v6 for interface {}: {e}",
-                                        iface.name
-                                    )
-                                }
-                            }
-                            _ => {}
-                        }
+        let watcher = netwatcher::watch_interfaces_with_callback({
+            let sock = sock.clone();
+            let ifaces = ifaces.clone();
+            move |update| {
+                for (iface_idx, iface) in update.interfaces.iter() {
+                    if iface
+                        .ipv6_ips()
+                        .all(|addr| addr.is_loopback() || addr.is_unspecified())
+                    {
+                        continue;
                     }
-                    for iface_idx in update.diff.removed {
-                        ifaces.lock().retain(|addr| addr.scope_id() != iface_idx);
 
-                        if let Err(e) = sock.leave_multicast_v6(&GROUP, iface_idx) {
+                    match sock.join_multicast_v6(&GROUP, *iface_idx) {
+                        Ok(()) => ifaces.lock().push(SocketAddrV6::new(
+                            GROUP,
+                            discovery_port,
+                            0,
+                            *iface_idx,
+                        )),
+                        Err(e) if e.kind() != io::ErrorKind::AddrInUse => {
+                            // skip AddrInUse - just means we've already joined the mv6
                             if let Some(iface) = update.interfaces.get(&iface_idx) {
                                 warn!(
-                                    "failed to leave multicast v6 for interface {}: {e}",
+                                    "failed to join multicast v6 for interface {}: {e}",
                                     iface.name
                                 )
                             }
                         }
+                        _ => {}
                     }
                 }
-            })
-            // todo: better error handling here
-            .expect("failed to bind discovery watcher"),
-        );
+                for iface_idx in update.diff.removed {
+                    ifaces.lock().retain(|addr| addr.scope_id() != iface_idx);
+
+                    if let Err(e) = sock.leave_multicast_v6(&GROUP, iface_idx) {
+                        if let Some(iface) = update.interfaces.get(&iface_idx) {
+                            warn!(
+                                "failed to leave multicast v6 for interface {}: {e}",
+                                iface.name
+                            )
+                        }
+                    }
+                }
+            }
+        })
+        // todo: better error handling here
+        .expect("failed to bind discovery watcher");
+        // ponytail: WatchHandle wraps a raw HANDLE and is not Send on Windows, which
+        // makes Discovery un-spawnable. It is a keep-alive only (never read), so leak
+        // it for process lifetime. Ceiling: the watcher outlives a dropped Session —
+        // give it an owning thread if exo ever opens sessions repeatedly.
+        #[cfg(windows)]
+        std::mem::forget(watcher);
+        #[cfg(unix)]
+        let _sync = Mutex::new(watcher);
         Ok(Self {
             sock,
             namespace,
@@ -113,6 +121,7 @@ impl Discovery {
             listen_port,
             zid,
             tick: interval(Duration::from_secs(1)),
+            #[cfg(unix)]
             _sync,
         })
     }
