@@ -1,16 +1,14 @@
 import argparse
 import multiprocessing as mp
 import os
-import resource
 import signal
 import sys
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Self
 
 import anyio
 from anyio.lowlevel import checkpoint as anyio_checkpoint
-from daemon import DaemonContext  # pyright: ignore[reportMissingTypeStubs]
-from exo_rs import Pidfile, PidfileError
 from loguru import logger
 from pydantic import PositiveInt
 
@@ -31,6 +29,34 @@ from exo.utils.channels import Receiver, channel
 from exo.utils.pydantic_ext import FrozenModel
 from exo.utils.task_group import TaskGroup
 from exo.worker.main import Worker
+
+if sys.platform == "win32":
+    # ponytail: exo_rs.Pidfile is POSIX-only (flock via flopen). filelock is already a
+    # base dependency and gives the same single-instance guard. Ceiling: no as_raw_fd(),
+    # so --legacy-daemon stays POSIX-only — spec 006 owns Windows service supervision.
+    from filelock import FileLock, Timeout
+
+    class PidfileError(Exception):
+        pass
+
+    class Pidfile:
+        def __init__(self, path: Path, _mode: int) -> None:
+            self._path = path
+            self._lock = FileLock(path.with_suffix(".lock"), timeout=0)
+            try:
+                self._lock.acquire()
+            except Timeout as e:
+                raise PidfileError(f"exo is already running (locked {path})") from e
+
+        def write(self) -> None:
+            _ = self._path.write_text(str(os.getpid()))
+
+        def close(self) -> None:
+            self._lock.release()
+            self._path.unlink(missing_ok=True)
+else:
+    from daemon import DaemonContext  # pyright: ignore[reportMissingTypeStubs]
+    from exo_rs import Pidfile, PidfileError
 
 
 @dataclass
@@ -286,6 +312,10 @@ def main():
         print(e, file=sys.stderr)
         raise SystemExit(1) from e
 
+    if args.legacy_daemon and sys.platform == "win32":
+        print("--legacy-daemon is not supported on Windows", file=sys.stderr)
+        raise SystemExit(1)
+
     try:
         if args.legacy_daemon:
             # keep stdio backed by explicit /dev/null streams. multiprocessing spawn expects
@@ -330,9 +360,12 @@ def main():
 
 
 def main_inner(args: "Args"):
-    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-    target = min(max(soft, 65535), hard)
-    resource.setrlimit(resource.RLIMIT_NOFILE, (target, hard))
+    if sys.platform != "win32":
+        import resource
+
+        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        target = min(max(soft, 65535), hard)
+        resource.setrlimit(resource.RLIMIT_NOFILE, (target, hard))
 
     mp.set_start_method("spawn", force=True)
 
