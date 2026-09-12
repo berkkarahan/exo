@@ -6,3 +6,6 @@ class Backend(str, Enum):
     MlxCpu = "MlxCpu"
     MlxCuda = "MlxCuda"
     Vllm = "Vllm"
+    OnnxDirectMl = "OnnxDirectMl"
+    OnnxCuda = "OnnxCuda"
+    OnnxCpu = "OnnxCpu"

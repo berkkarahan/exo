@@ -70,6 +70,13 @@ mlx-cuda13 = [
   "mlx-cuda-13==0.32.0; sys_platform == 'linux'",
   "nvidia-ml-py>=13.595.45",
 ]
+# onnxruntime-genai ships one distribution per execution provider, each bundling the
+# matching onnxruntime build. Never pair the base package with a separate EP package:
+# both unpack into the same `onnxruntime/` directory and clobber each other's native
+# libraries, leaving `import onnxruntime_genai` failing with a DLL init error.
+onnx-cpu = ["onnxruntime-genai; sys_platform == 'win32'"]
+onnx-directml = ["onnxruntime-genai-directml; sys_platform == 'win32'"]
+onnx-cuda = ["onnxruntime-genai-cuda; sys_platform == 'win32'"]
 
 ###
 # workspace configuration
@@ -185,7 +192,11 @@ root = "tools/src"
 [tool.uv]
 required-version = ">=0.8.6"
 prerelease = "allow"
-environments = ["sys_platform == 'darwin'", "sys_platform == 'linux'"]
+environments = [
+  "sys_platform == 'darwin'",
+  "sys_platform == 'linux'",
+  "sys_platform == 'win32'",
+]
 override-dependencies = ["opencv-python; python_version < '0'"]
 conflicts = [
   [
@@ -193,6 +204,9 @@ conflicts = [
     { extra = "mlx-cuda12" },
     { extra = "mlx-cpu" },
     { extra = "mlx-none" },
+    { extra = "onnx-directml" },
+    { extra = "onnx-cuda" },
+    { extra = "onnx-cpu" },
   ],
 ]
 
