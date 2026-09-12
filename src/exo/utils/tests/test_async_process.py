@@ -66,6 +66,16 @@ def _send_over_mp_channel(send: MpSender[str]) -> None:
     send.close()
 
 
+def _raw_stream_type_name(buffer: object) -> str:
+    raw: object = getattr(buffer, "raw", buffer)
+    return type(raw).__name__
+
+
+def _report_stdout_raw_stream_type() -> None:
+    print("MARKER: raw stdout type is", _raw_stream_type_name(sys.stdout.buffer))
+    print("stderr also works", file=sys.stderr)
+
+
 def _mlx_force_oom(size: int = 40_000) -> None:
     """
     Force an Out-Of-Memory (OOM) error in MLX by performing large tensor operations.
@@ -121,6 +131,10 @@ def _fd_identity(fd: int) -> tuple[int, int]:
 
 
 def _fd_count() -> int | None:
+    if sys.platform == "win32":
+        import psutil
+
+        return psutil.Process().num_handles()
     for fd_dir in ("/proc/self/fd", "/dev/fd"):
         with contextlib.suppress(OSError):
             return len(os.listdir(fd_dir))
@@ -318,7 +332,8 @@ async def test_repeated_bad_children_do_not_pollute_or_replace_parent_stdio(
             elif target is _abort_after_stdio_write:
                 assert b"abort-child: stdout before abort\n" in stdout
                 assert b"abort-child: stderr before abort\n" in stderr
-                assert exitcode == -signal.SIGABRT
+                if sys.platform != "win32":
+                    assert exitcode == -signal.SIGABRT
             else:
                 assert stdout == b""
                 assert b"stderr before exception\n" in stderr
@@ -384,7 +399,28 @@ async def test_repeated_crashing_children_do_not_grow_parent_fd_table() -> None:
 
     after = _fd_count()
     assert after is not None
-    assert after <= before + 2
+    if sys.platform == "win32":
+        # ponytail: num_handles() counts every kernel handle and jitters with thread
+        # pools/GC; a real leak here is +40 (2 write handles x 20 children), so a +10
+        # margin still catches it (one leaked handle per two children). Tighten
+        # further if it ever hides a real leak.
+        assert after <= before + 10
+    else:
+        assert after <= before + 2
+
+
+@pytest.mark.anyio
+@pytest.mark.skipif(
+    sys.platform != "win32", reason="console-backed stdio only exists on Windows"
+)
+async def test_child_stdout_is_rebuilt_off_console_backed_raw_stream() -> None:
+    exitcode, stdout, stderr = await _run_and_collect(_report_stdout_raw_stream_type)
+
+    stdout_text = stdout.decode("utf-8", errors="replace")
+    assert exitcode == 0
+    assert "MARKER: raw stdout type is FileIO" in stdout_text
+    assert "_WindowsConsoleIO" not in stdout_text
+    assert b"stderr also works" in stderr
 
 
 @pytest.mark.anyio
