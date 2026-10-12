@@ -9,3 +9,11 @@ class Backend(str, Enum):
     OnnxDirectMl = "OnnxDirectMl"
     OnnxCuda = "OnnxCuda"
     OnnxCpu = "OnnxCpu"
+    TinygradAmd = "TinygradAmd"
+    TinygradMetal = "TinygradMetal"
+    TinygradCuda = "TinygradCuda"
+    TinygradCpu = "TinygradCpu"
+    # Windows join identities. These are not MLX backends.
+    WinAMD = "WinAMD"
+    WinCUDA = "WinCUDA"
+    WinCPU = "WinCPU"

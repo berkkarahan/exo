@@ -55,7 +55,6 @@ if sys.platform == "win32":
             self._lock.release()
             self._path.unlink(missing_ok=True)
 else:
-    from daemon import DaemonContext  # pyright: ignore[reportMissingTypeStubs]
     from exo_rs import Pidfile, PidfileError
 
 
@@ -318,6 +317,8 @@ def main():
 
     try:
         if args.legacy_daemon:
+            from daemon import DaemonContext  # pyright: ignore[reportMissingTypeStubs]
+
             # keep stdio backed by explicit /dev/null streams. multiprocessing spawn expects
             # valid stdio FDs; letting DaemonContext close/reopen them can break runner startup.
             for stream in (sys.stdout, sys.stderr, sys.__stdout__, sys.__stderr__):
@@ -359,13 +360,23 @@ def main():
         pidfile.close()
 
 
-def main_inner(args: "Args"):
-    if sys.platform != "win32":
-        import resource
+def raise_file_descriptor_limit() -> None:
+    """Raise the open-file limit on Unix.
 
-        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-        target = min(max(soft, 65535), hard)
-        resource.setrlimit(resource.RLIMIT_NOFILE, (target, hard))
+    Windows has no ``resource`` module, so this returns without a change.
+    The Windows launcher can still start ``exo``.
+    """
+    if sys.platform == "win32":
+        return
+    import resource
+
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    target = min(max(soft, 65535), hard)
+    resource.setrlimit(resource.RLIMIT_NOFILE, (target, hard))
+
+
+def main_inner(args: "Args"):
+    raise_file_descriptor_limit()
 
     mp.set_start_method("spawn", force=True)
 

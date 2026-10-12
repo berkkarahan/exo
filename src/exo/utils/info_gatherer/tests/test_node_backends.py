@@ -7,31 +7,51 @@ from exo.utils.info_gatherer import info_gatherer, windows_gpu
 async def test_windows_backends_when_directml_present_and_no_nvidia():
     with (
         mock.patch.object(info_gatherer.sys, "platform", "win32"),
+        mock.patch.object(
+            info_gatherer, "collect_windows_join_backends", lambda: [Backend.WinCPU]
+        ),
         mock.patch.object(info_gatherer, "_has_directml_adapter", lambda: True),
         mock.patch.object(info_gatherer, "_has_nvml_cuda", lambda: False),
     ):
         result = await info_gatherer.NodeBackends.gather()
-    assert result.backends == [Backend.OnnxCpu, Backend.OnnxDirectMl]
+    assert result.backends == [
+        Backend.WinCPU,
+        Backend.OnnxCpu,
+        Backend.OnnxDirectMl,
+    ]
 
 
 async def test_windows_backends_when_directml_and_nvidia_both_present():
     with (
         mock.patch.object(info_gatherer.sys, "platform", "win32"),
+        mock.patch.object(
+            info_gatherer,
+            "collect_windows_join_backends",
+            lambda: [Backend.WinCUDA],
+        ),
         mock.patch.object(info_gatherer, "_has_directml_adapter", lambda: True),
         mock.patch.object(info_gatherer, "_has_nvml_cuda", lambda: True),
     ):
         result = await info_gatherer.NodeBackends.gather()
-    assert result.backends == [Backend.OnnxCpu, Backend.OnnxDirectMl, Backend.OnnxCuda]
+    assert result.backends == [
+        Backend.WinCUDA,
+        Backend.OnnxCpu,
+        Backend.OnnxDirectMl,
+        Backend.OnnxCuda,
+    ]
 
 
 async def test_windows_backends_when_no_gpu_falls_back_to_cpu_only():
     with (
         mock.patch.object(info_gatherer.sys, "platform", "win32"),
+        mock.patch.object(
+            info_gatherer, "collect_windows_join_backends", lambda: [Backend.WinCPU]
+        ),
         mock.patch.object(info_gatherer, "_has_directml_adapter", lambda: False),
         mock.patch.object(info_gatherer, "_has_nvml_cuda", lambda: False),
     ):
         result = await info_gatherer.NodeBackends.gather()
-    assert result.backends == [Backend.OnnxCpu]
+    assert result.backends == [Backend.WinCPU, Backend.OnnxCpu]
 
 
 async def test_windows_backends_when_directml_probe_raises_does_not_propagate():
@@ -40,6 +60,9 @@ async def test_windows_backends_when_directml_probe_raises_does_not_propagate():
 
     with (
         mock.patch.object(info_gatherer.sys, "platform", "win32"),
+        mock.patch.object(
+            info_gatherer, "collect_windows_join_backends", lambda: [Backend.WinCPU]
+        ),
         mock.patch.object(windows_gpu, "_probe_directml_adapter", _raising_probe),
         mock.patch.object(info_gatherer, "_has_nvml_cuda", lambda: False),
     ):
@@ -51,6 +74,9 @@ async def test_windows_backends_when_directml_probe_raises_does_not_propagate():
 async def test_windows_backends_contain_no_mlx_or_vllm_members():
     with (
         mock.patch.object(info_gatherer.sys, "platform", "win32"),
+        mock.patch.object(
+            info_gatherer, "collect_windows_join_backends", lambda: [Backend.WinCUDA]
+        ),
         mock.patch.object(info_gatherer, "_has_directml_adapter", lambda: True),
         mock.patch.object(info_gatherer, "_has_nvml_cuda", lambda: True),
     ):

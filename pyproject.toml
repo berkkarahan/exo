@@ -31,6 +31,7 @@ dependencies = [
 
 [project.scripts]
 exo = "exo.main:main"
+exo-windows = "exo.windows.launcher:main"
 
 # dependencies only required for development
 [dependency-groups]
@@ -77,6 +78,7 @@ mlx-cuda13 = [
 onnx-cpu = ["onnxruntime-genai; sys_platform == 'win32'"]
 onnx-directml = ["onnxruntime-genai-directml; sys_platform == 'win32'"]
 onnx-cuda = ["onnxruntime-genai-cuda; sys_platform == 'win32'"]
+tinygrad = ["tinygrad>=0.10.3"]
 
 ###
 # workspace configuration
@@ -171,6 +173,10 @@ stubPath = ".typings"
 
 [[tool.basedpyright.executionEnvironments]]
 root = "src/exo/worker/engines/image"
+reportMissingModuleSource = false
+
+[[tool.basedpyright.executionEnvironments]]
+root = "src/exo/backends"
 reportMissingModuleSource = false
 
 [[tool.basedpyright.executionEnvironments]]

@@ -523,6 +523,9 @@ onnx-cuda = [
 onnx-directml = [
     { name = "onnxruntime-genai-directml", marker = "sys_platform == 'win32'" },
 ]
+tinygrad = [
+    { name = "tinygrad", marker = "sys_platform == 'darwin' or sys_platform == 'linux' or sys_platform == 'win32' or (extra == 'extra-3-exo-mlx-cpu' and extra == 'extra-3-exo-mlx-cuda12') or (extra == 'extra-3-exo-mlx-cpu' and extra == 'extra-3-exo-mlx-cuda13') or (extra == 'extra-3-exo-mlx-cpu' and extra == 'extra-3-exo-mlx-none') or (extra == 'extra-3-exo-mlx-cpu' and extra == 'extra-3-exo-onnx-cpu') or (extra == 'extra-3-exo-mlx-cpu' and extra == 'extra-3-exo-onnx-cuda') or (extra == 'extra-3-exo-mlx-cpu' and extra == 'extra-3-exo-onnx-directml') or (extra == 'extra-3-exo-mlx-cuda12' and extra == 'extra-3-exo-mlx-cuda13') or (extra == 'extra-3-exo-mlx-cuda12' and extra == 'extra-3-exo-mlx-none') or (extra == 'extra-3-exo-mlx-cuda12' and extra == 'extra-3-exo-onnx-cpu') or (extra == 'extra-3-exo-mlx-cuda12' and extra == 'extra-3-exo-onnx-cuda') or (extra == 'extra-3-exo-mlx-cuda12' and extra == 'extra-3-exo-onnx-directml') or (extra == 'extra-3-exo-mlx-cuda13' and extra == 'extra-3-exo-mlx-none') or (extra == 'extra-3-exo-mlx-cuda13' and extra == 'extra-3-exo-onnx-cpu') or (extra == 'extra-3-exo-mlx-cuda13' and extra == 'extra-3-exo-onnx-cuda') or (extra == 'extra-3-exo-mlx-cuda13' and extra == 'extra-3-exo-onnx-directml') or (extra == 'extra-3-exo-mlx-none' and extra == 'extra-3-exo-onnx-cpu') or (extra == 'extra-3-exo-mlx-none' and extra == 'extra-3-exo-onnx-cuda') or (extra == 'extra-3-exo-mlx-none' and extra == 'extra-3-exo-onnx-directml') or (extra == 'extra-3-exo-onnx-cpu' and extra == 'extra-3-exo-onnx-cuda') or (extra == 'extra-3-exo-onnx-cpu' and extra == 'extra-3-exo-onnx-directml') or (extra == 'extra-3-exo-onnx-cuda' and extra == 'extra-3-exo-onnx-directml')" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -577,6 +580,7 @@ requires-dist = [
     { name = "python-multipart", specifier = ">=0.0.21" },
     { name = "rustworkx", specifier = ">=0.17.1" },
     { name = "tiktoken", specifier = ">=0.12.0" },
+    { name = "tinygrad", marker = "extra == 'tinygrad'", specifier = ">=0.10.3" },
     { name = "tomlkit", specifier = ">=0.14.0" },
     { name = "torch", marker = "sys_platform == 'darwin' and extra == 'mlx'", specifier = "==2.10.0" },
     { name = "torch", marker = "sys_platform == 'linux' and extra == 'mlx' and extra != 'mlx-cpu' and extra != 'mlx-cuda12' and extra != 'mlx-cuda13'", specifier = "==2.10.0" },
@@ -597,7 +601,7 @@ requires-dist = [
     { name = "types-aiofiles", specifier = ">=24.1.0.20250708" },
     { name = "zstandard", specifier = ">=0.23.0" },
 ]
-provides-extras = ["build", "mlx-none", "mlx", "mlx-cpu", "mlx-cuda12", "mlx-cuda13", "onnx-cpu", "onnx-directml", "onnx-cuda"]
+provides-extras = ["build", "mlx-none", "mlx", "mlx-cpu", "mlx-cuda12", "mlx-cuda13", "onnx-cpu", "onnx-directml", "onnx-cuda", "tinygrad"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -2997,6 +3001,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/22/1f/ae535223a8c4ef4c0c1192e3f9b82da660be9eb66b9279e95c99288e9dab/tiktoken-0.12.0-cp313-cp313t-musllinux_1_2_aarch64.whl", hash = "sha256:04f0e6a985d95913cabc96a741c5ffec525a2c72e9df086ff17ebe35985c800e", size = 1194451, upload-time = "2025-10-06T20:22:15.545Z" },
     { url = "https://files.pythonhosted.org/packages/78/a7/f8ead382fce0243cb625c4f266e66c27f65ae65ee9e77f59ea1653b6d730/tiktoken-0.12.0-cp313-cp313t-musllinux_1_2_x86_64.whl", hash = "sha256:0ee8f9ae00c41770b5f9b0bb1235474768884ae157de3beb5439ca0fd70f3e25", size = 1253794, upload-time = "2025-10-06T20:22:16.624Z" },
     { url = "https://files.pythonhosted.org/packages/93/e0/6cc82a562bc6365785a3ff0af27a2a092d57c47d7a81d9e2295d8c36f011/tiktoken-0.12.0-cp313-cp313t-win_amd64.whl", hash = "sha256:dc2dd125a62cb2b3d858484d6c614d136b5b848976794edfb63688d539b8b93f", size = 878777, upload-time = "2025-10-06T20:22:18.036Z" },
+]
+
+[[package]]
+name = "tinygrad"
+version = "0.14.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ca/91/08bcf49cb05ddd63106552c120318e6bacfca392b0f5888c298c601310a8/tinygrad-0.14.0.tar.gz", hash = "sha256:437be6bb7481ec26e332e4f4342f6ea09e41258e62c5c09f4a9ed7aeb7829a07", size = 2660069, upload-time = "2026-08-24T22:53:11.682Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e5/47/18446b91a1ae8cf4ce216c024e6cc93bbff6c0e5667baac7f5dacec0d065/tinygrad-0.14.0-py3-none-any.whl", hash = "sha256:d2a5bea33c637fdf105963632329876b3d3253d38295ac1ffd2ff81646d93be3", size = 2757442, upload-time = "2026-08-24T22:53:10.116Z" },
 ]
 
 [[package]]
