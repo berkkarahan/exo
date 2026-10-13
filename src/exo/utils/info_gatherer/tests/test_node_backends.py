@@ -92,11 +92,48 @@ async def test_darwin_backends_unchanged():
         mock.patch.object(info_gatherer.sys, "platform", "darwin"),
         mock.patch.object(info_gatherer, "IS_DARWIN", True),
         mock.patch.object(info_gatherer, "_has_nvml_cuda", lambda: False),
+        mock.patch.dict(info_gatherer.os.environ, {}, clear=False),
     ):
+        info_gatherer.os.environ.pop("EXO_INFERENCE_RUNTIME", None)
+        info_gatherer.os.environ.pop("EXO_TINYGRAD_DEVICES", None)
         result = await info_gatherer.NodeBackends.gather()
     assert Backend.MlxCpu in result.backends
     assert Backend.MlxMetal in result.backends
     assert not any(b.value.startswith("Onnx") for b in result.backends)
+
+
+async def test_darwin_tinygrad_runtime_advertises_only_metal():
+    with (
+        mock.patch.object(info_gatherer.sys, "platform", "darwin"),
+        mock.patch.object(info_gatherer, "IS_DARWIN", True),
+        mock.patch.dict(
+            info_gatherer.os.environ,
+            {"EXO_INFERENCE_RUNTIME": "tinygrad"},
+            clear=False,
+        ),
+    ):
+        info_gatherer.os.environ.pop("EXO_TINYGRAD_DEVICES", None)
+        result = await info_gatherer.NodeBackends.gather()
+    assert result.backends == [Backend.TinygradMetal]
+    assert Backend.MlxMetal not in result.backends
+    assert Backend.MlxCpu not in result.backends
+
+
+async def test_darwin_mlx_runtime_ignores_tinygrad_devices():
+    with (
+        mock.patch.object(info_gatherer.sys, "platform", "darwin"),
+        mock.patch.object(info_gatherer, "IS_DARWIN", True),
+        mock.patch.object(info_gatherer, "_has_nvml_cuda", lambda: False),
+        mock.patch.dict(
+            info_gatherer.os.environ,
+            {"EXO_INFERENCE_RUNTIME": "mlx", "EXO_TINYGRAD_DEVICES": "METAL"},
+            clear=False,
+        ),
+    ):
+        result = await info_gatherer.NodeBackends.gather()
+    assert Backend.MlxMetal in result.backends
+    assert Backend.MlxCpu in result.backends
+    assert Backend.TinygradMetal not in result.backends
 
 
 async def test_linux_backends_unchanged():
@@ -104,7 +141,10 @@ async def test_linux_backends_unchanged():
         mock.patch.object(info_gatherer.sys, "platform", "linux"),
         mock.patch.object(info_gatherer, "IS_DARWIN", False),
         mock.patch.object(info_gatherer, "_has_nvml_cuda", lambda: False),
+        mock.patch.dict(info_gatherer.os.environ, {}, clear=False),
     ):
+        info_gatherer.os.environ.pop("EXO_INFERENCE_RUNTIME", None)
+        info_gatherer.os.environ.pop("EXO_TINYGRAD_DEVICES", None)
         result = await info_gatherer.NodeBackends.gather()
     assert Backend.MlxCpu in result.backends
     assert not any(b.value.startswith("Onnx") for b in result.backends)

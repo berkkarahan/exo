@@ -1,6 +1,7 @@
 from enum import Enum
+from typing import Annotated
 
-from pydantic import Field, model_validator
+from pydantic import BeforeValidator, Field, model_validator
 
 from exo.shared.models.model_cards import ModelTask
 from exo.shared.types.backends import Backend
@@ -11,6 +12,21 @@ from exo.utils.pydantic_ext import FrozenModel, TaggedModel
 
 class InstanceId(Id):
     pass
+
+
+def _backend_from_name(value: object) -> object:
+    """Accept a backend name from placement-preview JSON.
+
+    Raises:
+        ValueError: Pydantic reports this as a validation error on the
+            create-instance request when the name is not a backend.
+    """
+    if isinstance(value, str):
+        return Backend(value)
+    return value
+
+
+BackendName = Annotated[Backend, BeforeValidator(_backend_from_name)]
 
 
 class InstanceMeta(str, Enum):
@@ -46,7 +62,8 @@ class TinygradInstance(BaseInstance):
     leaves the map empty and does not open a socket.
     """
 
-    device_backend_by_node: dict[NodeId, Backend]
+    # Placement previews serialize each backend as its name.
+    device_backend_by_node: dict[NodeId, BackendName]
     hosts_by_node: dict[NodeId, list[Host]] = Field(default_factory=dict)
     ephemeral_port: int = 0
 

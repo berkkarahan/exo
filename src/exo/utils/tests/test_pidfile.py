@@ -8,7 +8,12 @@ import textwrap
 from pathlib import Path
 from typing import Final
 
-from exo_rs import Pidfile
+import pytest
+
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="exo_rs.Pidfile is POSIX-only; Windows coverage is test_windows_pidfile.py",
+)
 
 _CHILD_ACQUIRE_PIDFILE_SCRIPT: Final = textwrap.dedent(
     """
@@ -42,6 +47,8 @@ def _run_child_acquire_pidfile(path: Path) -> subprocess.CompletedProcess[str]:
 def test_acquire_exo_pidfile_writes_current_pid_and_removes_on_drop(
     tmp_path: Path,
 ) -> None:
+    from exo_rs import Pidfile
+
     path = tmp_path / "exo.pid"
 
     handle = Pidfile(path, 0o0600)
@@ -57,6 +64,8 @@ def test_acquire_exo_pidfile_writes_current_pid_and_removes_on_drop(
 def test_acquire_exo_pidfile_rejects_second_process(
     tmp_path: Path,
 ) -> None:
+    from exo_rs import Pidfile
+
     path = tmp_path / "exo.pid"
 
     handle = Pidfile(path, 0o0600)

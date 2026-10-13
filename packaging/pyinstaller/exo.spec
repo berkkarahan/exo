@@ -32,18 +32,14 @@ block_cipher = None
 def _module_directory(module_name: str) -> Path:
     spec = importlib.util.find_spec(module_name)
     if spec is None:
-        raise SystemExit(f"Module '{module_name}' is not available in the current environment.")
+        raise SystemExit(
+            f"Module '{module_name}' is not available in the current environment."
+        )
     if spec.submodule_search_locations:
         return Path(next(iter(spec.submodule_search_locations))).resolve()
     if spec.origin:
         return Path(spec.origin).resolve().parent
     raise SystemExit(f"Unable to determine installation directory for '{module_name}'.")
-
-
-MLX_PACKAGE_DIR = _module_directory("mlx")
-MLX_LIB_DIR = MLX_PACKAGE_DIR / "lib"
-if not MLX_LIB_DIR.is_dir():
-    raise SystemExit(f"mlx Metal libraries are missing: {MLX_LIB_DIR}")
 
 
 def _safe_collect(package_name: str) -> list[str]:
@@ -55,21 +51,38 @@ def _safe_collect(package_name: str) -> list[str]:
 
 HIDDEN_IMPORTS = sorted(
     set(
-        collect_submodules("mlx")
-        + _safe_collect("mlx_lm")
-        + _safe_collect("mlx_vlm")
-        + _safe_collect("transformers")
+        _safe_collect("transformers")
+        + _safe_collect("tinygrad")
+        + _safe_collect("pyopencl")
+        + _safe_collect("exo_rs")
     )
 )
 
 DATAS: list[tuple[str, str]] = [
     (str(DASHBOARD_DIR), "dashboard"),
     (str(RESOURCES_DIR), "resources"),
-    (str(MLX_LIB_DIR), "mlx/lib"),
     (str(EXO_SHARED_MODELS_DIR), "exo/shared/models"),
 ]
 
+BINARIES: list[tuple[str, str]] = []
+
+if sys.platform == "win32":
+    HIDDEN_IMPORTS = sorted(set(HIDDEN_IMPORTS + ["tkinter", "tkinter.ttk"]))
+
 if sys.platform == "darwin":
+    MLX_PACKAGE_DIR = _module_directory("mlx")
+    MLX_LIB_DIR = MLX_PACKAGE_DIR / "lib"
+    if not MLX_LIB_DIR.is_dir():
+        raise SystemExit(f"mlx Metal libraries are missing: {MLX_LIB_DIR}")
+    HIDDEN_IMPORTS = sorted(
+        set(
+            HIDDEN_IMPORTS
+            + collect_submodules("mlx")
+            + _safe_collect("mlx_lm")
+            + _safe_collect("mlx_vlm")
+        )
+    )
+    DATAS.append((str(MLX_LIB_DIR), "mlx/lib"))
     MACMON_PATH = shutil.which("macmon")
     if MACMON_PATH is None:
         raise SystemExit(
@@ -78,10 +91,7 @@ if sys.platform == "darwin":
             "cargo install --git https://github.com/vladkens/macmon "
             "--rev a1cd06b6cc0d5e61db24fd8832e74cd992097a7d macmon --force"
         )
-
-BINARIES: list[tuple[str, str]] = [
-    (MACMON_PATH, "."),
-] if sys.platform == "darwin" else []
+    BINARIES.append((MACMON_PATH, "."))
 
 a = Analysis(
     [str(ENTRYPOINT)],
@@ -108,7 +118,10 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
-    console=True,
+    console=sys.platform != "win32",
+    icon=(
+        str(PROJECT_ROOT / "resources" / "exo.ico") if sys.platform == "win32" else None
+    ),
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

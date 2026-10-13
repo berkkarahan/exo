@@ -2,6 +2,10 @@ from collections.abc import Mapping
 from copy import deepcopy
 from typing import Sequence
 
+from exo.master.placement_memory import (
+    memory_after_reservations,
+    model_placement_bytes,
+)
 from exo.master.placement_utils import (
     Cycle,
     filter_cycles_by_memory,
@@ -125,14 +129,6 @@ def place_instance(
     download_status: Mapping[NodeId, Sequence[DownloadProgress]] | None = None,
     node_rdma_ctl: Mapping[NodeId, NodeRdmaCtlStatus] | None = None,
 ) -> dict[InstanceId, Instance]:
-    # Tensor parallel is not implemented for tinygrad. Rewrite before the
-    # tensor divisibility filter so a multi-node cycle still places layers.
-    if (
-        command.instance_meta == InstanceMeta.Tinygrad
-        and command.sharding != Sharding.Pipeline
-    ):
-        command = command.model_copy(update={"sharding": Sharding.Pipeline})
-
     cycles = topology.get_cycles()
     candidate_cycles = list(filter(lambda it: len(it) >= command.min_nodes, cycles))
 
@@ -143,8 +139,13 @@ def place_instance(
             for cycle in candidate_cycles
             if required_nodes.issubset(cycle.node_ids)
         ]
+    placement_memory = node_memory
+    required_memory = command.model_card.storage_size
+    if command.instance_meta == InstanceMeta.Tinygrad:
+        placement_memory = memory_after_reservations(node_memory, current_instances)
+        required_memory = Memory.from_bytes(model_placement_bytes(command.model_card))
     cycles_with_sufficient_memory = filter_cycles_by_memory(
-        candidate_cycles, node_memory, command.model_card.storage_size
+        candidate_cycles, placement_memory, required_memory
     )
     if len(cycles_with_sufficient_memory) == 0:
         raise ValueError("No cycles found with sufficient memory")
@@ -255,14 +256,14 @@ def place_instance(
                 cycle, command.model_card.model_id, resolved_download_status
             ),
             sum(
-                (node_memory[node_id].ram_available for node_id in cycle),
+                (placement_memory[node_id].ram_available for node_id in cycle),
                 start=Memory(),
             ),
         ),
     )
 
-    # Tensor and Jaccl require multiple nodes, so a single node uses pipeline
-    # ring. Tinygrad sharding was already forced to pipeline above.
+    # One MLX node has no peers to reduce with, so it runs pipeline on ring.
+    # A one-node Tinygrad tensor shard keeps every layer on that device.
     if len(selected_cycle) == 1 and command.instance_meta != InstanceMeta.Tinygrad:
         command = command.model_copy(
             update={
@@ -272,7 +273,7 @@ def place_instance(
         )
 
     shard_assignments = get_shard_assignments(
-        command.model_card, selected_cycle, command.sharding, node_memory
+        command.model_card, selected_cycle, command.sharding, placement_memory
     )
 
     cycle_digraph: Topology = topology.get_subgraph_from_nodes(selected_cycle.node_ids)

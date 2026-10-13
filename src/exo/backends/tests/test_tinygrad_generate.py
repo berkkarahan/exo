@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import struct
+import sys
 import threading
 import time
 from pathlib import Path
@@ -11,6 +12,10 @@ import pytest
 from exo.backends.tinygrad_checkpoint import read_gguf_checkpoint
 from exo.backends.tinygrad_engine import TinygradEngine
 from exo.backends.tinygrad_pipeline import connect_memory_pipeline
+from exo.backends.tinygrad_progress import (
+    TinygradProgressBudgets,
+    TinygradProgressDeadlineError,
+)
 from exo.backends.tinygrad_tokenizer import (
     GgufTokenizer,
     decode_token,
@@ -29,7 +34,12 @@ from exo.shared.types.backends import Backend
 from exo.shared.types.chunks import TokenChunk
 from exo.shared.types.common import CommandId, NodeId
 from exo.shared.types.memory import Memory
-from exo.shared.types.tasks import ImageGeneration, TaskId, TextGeneration
+from exo.shared.types.tasks import (
+    CANCEL_ALL_TASKS,
+    ImageGeneration,
+    TaskId,
+    TextGeneration,
+)
 from exo.shared.types.text_generation import (
     InputMessage,
     InputMessageContent,
@@ -118,6 +128,74 @@ def test_gguf_header_keeps_tokenizer_arrays(tmp_path: Path) -> None:
     assert checkpoint.tokenizer_merges == ("a b",)
     assert checkpoint.tokenizer_token_types == (1, 1, 1)
     assert checkpoint.tokenizer_token_count == 3
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="OpenCL generation needs Windows")
+def test_live_opencl_generation_uses_the_discrete_gpu(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pytest.importorskip("tinygrad")
+    from tinygrad.runtime.ops_cl import CLDevice
+
+    from exo.backends.tinygrad_opencl import (
+        clear_opencl_resolution_cache,
+        resolve_usable_opencl_adapter,
+    )
+
+    clear_opencl_resolution_cache()
+    adapter = resolve_usable_opencl_adapter()
+    if adapter is None or adapter.host_unified_memory:
+        pytest.skip("no discrete OpenCL GPU")
+
+    engine = _loaded_engine(
+        tmp_path,
+        monkeypatch,
+        tokens=("a", "b", "c", "d"),
+        eos_token_id=1,
+        layer_count=1,
+        include_output=True,
+        device_name="CL",
+    )
+    loaded_shard = engine.loaded_shard
+    assert loaded_shard is not None
+    assert loaded_shard.layers[0].input_norm_weight.device == "CL"
+    assert CLDevice("CL").device_name == adapter.device_name
+
+    engine.submit(_text_task(max_output_tokens=1))
+    results = list(engine.step())
+    assert len(results) == 2
+    _task_id, chunk = results[0]
+    assert isinstance(chunk, TokenChunk)
+    assert chunk.token_id == 0
+    assert chunk.text == "a"
+    assert chunk.finish_reason == "length"
+    assert isinstance(results[1][1], FinishedResponse)
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="OpenCL generation needs Windows")
+def test_q4_k_block_realizes_on_the_pinned_opencl_device(tmp_path: Path) -> None:
+    pytest.importorskip("tinygrad")
+    from tinygrad.runtime.ops_cl import CLDevice
+
+    from exo.backends.tinygrad_checkpoint import ggml_tensor_from_file
+    from exo.backends.tinygrad_engine import assign_tinygrad_default_device
+    from exo.backends.tinygrad_opencl import (
+        clear_opencl_resolution_cache,
+        resolve_usable_opencl_adapter,
+    )
+
+    clear_opencl_resolution_cache()
+    adapter = resolve_usable_opencl_adapter()
+    if adapter is None or adapter.host_unified_memory:
+        pytest.skip("no discrete OpenCL GPU")
+    assign_tinygrad_default_device("CL")
+    payload = tmp_path / "q4k.bin"
+    payload.write_bytes(b"\x00" * 144)
+    realized = ggml_tensor_from_file(payload, 0, 144, 256, 12).contiguous().realize()
+    assert realized.device == "CL"
+    assert CLDevice("CL").device_name == adapter.device_name
+    assert realized.shape == (1, 256)
+    assert realized.float().numpy().tobytes() == struct.pack("<256f", *([0.0] * 256))
 
 
 def test_length_stop_emits_one_token_then_finished(
@@ -219,6 +297,167 @@ def test_cancelled_task_yields_cancelled_response(
     engine.cancel_receiver = _PendingCancellations([task.task_id])
     engine.submit(task)
     assert list(engine.step()) == [(task.task_id, CancelledResponse())]
+
+
+def _require_discrete_opencl() -> None:
+    pytest.importorskip("tinygrad")
+    from exo.backends.tinygrad_opencl import (
+        clear_opencl_resolution_cache,
+        resolve_usable_opencl_adapter,
+    )
+
+    clear_opencl_resolution_cache()
+    adapter = resolve_usable_opencl_adapter()
+    if adapter is None or adapter.host_unified_memory:
+        pytest.skip("no discrete OpenCL GPU")
+
+
+def test_request_after_cancel_all_still_generates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _require_discrete_opencl()
+    engine = _loaded_engine(
+        tmp_path,
+        monkeypatch,
+        tokens=("a", "b", "c", "d"),
+        eos_token_id=1,
+        layer_count=1,
+        include_output=True,
+        device_name="CL",
+    )
+    monkeypatch.setattr(engine, "_realize_logits", _fixed_logits)
+    first = _text_task(max_output_tokens=4)
+    second = _text_task(max_output_tokens=1)
+    engine.submit(first)
+    engine.cancel_receiver = _PendingCancellations([CANCEL_ALL_TASKS])
+    assert list(engine.step()) == [(first.task_id, CancelledResponse())]
+    engine.submit(second)
+    results = list(engine.step())
+    assert results[0][0] == second.task_id
+    assert isinstance(results[0][1], TokenChunk)
+
+
+def test_compile_deadline_is_raised_before_warmup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _require_discrete_opencl()
+    engine = _loaded_engine(
+        tmp_path,
+        monkeypatch,
+        tokens=("a", "b", "c", "d"),
+        eos_token_id=1,
+        layer_count=1,
+        include_output=True,
+        device_name="CL",
+    )
+    calls = {"count": 0}
+
+    def logits(token_ids: object) -> list[float]:
+        del token_ids
+        calls["count"] += 1
+        return [1.0, 0.0, 0.0, 0.0]
+
+    monkeypatch.setattr(engine, "_realize_logits", logits)
+    engine.progress_budgets = TinygradProgressBudgets(
+        compile_seconds=1.0,
+        prefill_seconds=120.0,
+        decode_seconds=60.0,
+        transport_seconds=30.0,
+    )
+    engine.progress_clock = _ScriptedClock((0.0, 10.0))
+    with pytest.raises(TinygradProgressDeadlineError, match="compile") as caught:
+        engine.warmup()
+    assert caught.value.phase == "compile"
+    assert calls["count"] == 0
+
+
+def test_prefill_deadline_is_raised_before_the_forward(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _require_discrete_opencl()
+    engine = _loaded_engine(
+        tmp_path,
+        monkeypatch,
+        tokens=("a", "b", "c", "d"),
+        eos_token_id=1,
+        layer_count=1,
+        include_output=True,
+        device_name="CL",
+    )
+    calls = {"count": 0}
+
+    def logits(token_ids: object) -> list[float]:
+        del token_ids
+        calls["count"] += 1
+        return [1.0, 0.0, 0.0, 0.0]
+
+    monkeypatch.setattr(engine, "_realize_logits", logits)
+    engine.progress_budgets = TinygradProgressBudgets(
+        compile_seconds=600.0,
+        prefill_seconds=1.0,
+        decode_seconds=60.0,
+        transport_seconds=30.0,
+    )
+    engine.progress_clock = _ScriptedClock((0.0, 10.0))
+    engine.submit(_text_task(max_output_tokens=1))
+    with pytest.raises(TinygradProgressDeadlineError, match="prefill") as caught:
+        _ = list(engine.step())
+    assert caught.value.phase == "prefill"
+    assert calls["count"] == 0
+
+
+def test_decode_deadline_is_raised_on_the_following_step(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _require_discrete_opencl()
+    engine = _loaded_engine(
+        tmp_path,
+        monkeypatch,
+        tokens=("a", "b", "c", "d"),
+        eos_token_id=1,
+        layer_count=1,
+        include_output=True,
+        device_name="CL",
+    )
+    calls = {"count": 0}
+
+    def logits(token_ids: object) -> list[float]:
+        del token_ids
+        calls["count"] += 1
+        return [1.0, 0.0, 0.0, 0.0]
+
+    monkeypatch.setattr(engine, "_realize_logits", logits)
+    engine.progress_budgets = TinygradProgressBudgets(
+        compile_seconds=600.0,
+        prefill_seconds=10.0,
+        decode_seconds=1.0,
+        transport_seconds=30.0,
+    )
+    engine.progress_clock = _ScriptedClock((0.0, 0.0, 0.0, 0.0, 5.0))
+    engine.submit(_text_task(max_output_tokens=4))
+    first = list(engine.step())
+    assert isinstance(first[0][1], TokenChunk)
+    with pytest.raises(TinygradProgressDeadlineError, match="decode") as caught:
+        _ = list(engine.step())
+    assert caught.value.phase == "decode"
+    assert calls["count"] == 1
+
+
+class _ScriptedClock:
+    def __init__(self, readings: tuple[float, ...]) -> None:
+        self._readings = readings
+        self._index = 0
+
+    def __call__(self) -> float:
+        reading = self._readings[self._index]
+        if self._index + 1 < len(self._readings):
+            self._index += 1
+        return reading
+
+
+def _fixed_logits(token_ids: object) -> list[float]:
+    del token_ids
+    return [1.0, 0.0, 0.0, 0.0]
 
 
 def test_image_task_is_rejected(
@@ -328,7 +567,8 @@ def _loaded_engine(
     layer_count: int,
     include_output: bool,
     end_layer: int | None = None,
-):
+    device_name: Literal["CPU", "CL"] = "CPU",
+) -> TinygradEngine:
     from exo.backends.tinygrad_engine import TinygradEngine
 
     _write_generation_gguf(
@@ -348,7 +588,7 @@ def _loaded_engine(
         use_temporary_directory,
     )
     resolved_end = layer_count if end_layer is None else end_layer
-    engine = TinygradEngine(device_name="CPU")
+    engine = TinygradEngine(device_name=device_name)
     list(
         engine.iter_load_model(
             _bound_instance(
@@ -359,6 +599,24 @@ def _loaded_engine(
         )
     )
     return engine
+
+
+def write_tinygrad_generation_gguf(
+    path: Path,
+    *,
+    tokens: tuple[str, ...],
+    eos_token_id: int,
+    layer_count: int,
+    include_output: bool,
+) -> None:
+    """Write the one-layer GGUF fixture used by loader and registration tests."""
+    _write_generation_gguf(
+        path,
+        tokens=tokens,
+        eos_token_id=eos_token_id,
+        layer_count=layer_count,
+        include_output=include_output,
+    )
 
 
 def _write_generation_gguf(

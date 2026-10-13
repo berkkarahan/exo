@@ -1,5 +1,6 @@
 import json
 from enum import Enum
+from pathlib import PurePosixPath
 from typing import Annotated, Any
 
 import aiofiles
@@ -161,6 +162,7 @@ class ModelCard(FrozenModel):
     hidden_size: PositiveInt
     supports_tensor: bool
     num_key_value_heads: PositiveInt | None = None
+    num_attention_heads: PositiveInt | None = None
     tasks: list[ModelTask]
     components: list[ComponentInfo] | None = None
     family: str = ""
@@ -175,6 +177,7 @@ class ModelCard(FrozenModel):
     is_custom: bool = False
     vision: VisionCardConfig | None = None
     sampling_defaults: SamplingDefaults = Field(default_factory=SamplingDefaults)
+    gguf_filename: str | None = None
 
     @model_validator(mode="after")
     def _autodetect_vision(self) -> "ModelCard":
@@ -203,6 +206,25 @@ class ModelCard(FrozenModel):
     @classmethod
     def _validate_backends(cls, v: list[str | Backend]) -> list[Backend]:
         return [item if isinstance(item, Backend) else Backend(item) for item in v]
+
+    @field_validator("gguf_filename")
+    @classmethod
+    def _validate_gguf_filename(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        path = PurePosixPath(value)
+        if (
+            "\\" in value
+            or "*" in value
+            or "?" in value
+            or path.is_absolute()
+            or ".." in path.parts
+            or not value.lower().endswith(".gguf")
+        ):
+            raise ValueError(
+                "gguf_filename must be a relative GGUF path inside the repository"
+            )
+        return value
 
     async def save(self, path: Path) -> None:
         async with await open_file(path, "w") as f:
@@ -233,12 +255,37 @@ class ModelCard(FrozenModel):
         return mc
 
     @staticmethod
-    async def fetch_from_hf(model_id: ModelId) -> "ModelCard":
-        """Fetches storage size and number of layers for a Hugging Face model, returns Pydantic ModelMeta.
+    async def fetch_from_hf(
+        model_id: ModelId, *, gguf_filename: str | None = None
+    ) -> "ModelCard":
+        """Fetch a model card from Hugging Face without saving it.
 
-        This is a pure fetch — it does NOT save to disk or update the cache.
-        Persistence is handled by the event-sourcing layer (worker event handler).
+        A repository with ``model.safetensors.index.json`` keeps the
+        safetensors card unless ``gguf_filename`` is set. A GGUF-only
+        repository registers one file. Persistence is handled by the
+        event-sourcing layer.
+
+        Raises:
+            GgufRegistrationError: The model-add API surfaces this when a
+                GGUF repository has no single registrable file or its header
+                cannot be read.
         """
+        from exo.download.download_utils import fetch_file_list_with_cache
+        from exo.shared.models.gguf_card import (
+            fetch_gguf_model_card,
+            repository_gguf_paths,
+        )
+
+        file_list = await fetch_file_list_with_cache(model_id, "main", recursive=True)
+        paths = tuple(entry.path for entry in file_list if entry.type == "file")
+        has_safetensors_index = "model.safetensors.index.json" in paths
+        if gguf_filename is not None or (
+            not has_safetensors_index and repository_gguf_paths(paths)
+        ):
+            return await fetch_gguf_model_card(
+                model_id, file_list, preference=gguf_filename
+            )
+
         # TODO: failure if files do not exist
         config_data = await fetch_config_data(model_id)
         num_layers = config_data.layer_count

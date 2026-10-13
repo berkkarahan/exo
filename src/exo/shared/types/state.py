@@ -61,6 +61,9 @@ class State(FrozenModel):
     node_thunderbolt_bridge: Mapping[NodeId, ThunderboltBridgeStatus] = {}
     node_rdma_ctl: Mapping[NodeId, NodeRdmaCtlStatus] = {}
     node_backends: Mapping[NodeId, list[Backend]] = {}
+    # Nodes kept out of the cluster because their runtime does not match.
+    # A later compatible NodeBackends event clears the entry and admits them.
+    refused_node_backends: Mapping[NodeId, list[Backend]] = {}
 
     # Detected cycles where all nodes have Thunderbolt bridge enabled (>2 nodes)
     thunderbolt_bridge_cycles: Sequence[Sequence[NodeId]] = []

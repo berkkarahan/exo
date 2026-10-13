@@ -125,6 +125,7 @@ from exo.api.types.openai_responses import (
 )
 from exo.master.image_store import ImageStore
 from exo.master.placement import place_instance as get_instance_placements
+from exo.master.placement_memory import model_placement_bytes
 from exo.shared.apply import apply
 from exo.shared.constants import (
     DASHBOARD_DIR,
@@ -138,12 +139,18 @@ from exo.shared.constants import (
 from exo.shared.election import ElectionMessage
 from exo.shared.logging import InterceptLogger
 from exo.shared.models import model_cards
+from exo.shared.models.catalogue import (
+    CatalogueSearch,
+    catalogue_searches,
+    model_card_matches_catalogue,
+)
 from exo.shared.models.model_cards import (
     ModelCard,
     ModelId,
     ModelTask,
 )
 from exo.shared.tracing import TraceEvent, compute_stats, export_trace, load_trace_file
+from exo.shared.types.backends import Backend
 from exo.shared.types.chunks import (
     ErrorChunk,
     ImageChunk,
@@ -525,16 +532,17 @@ class API:
                 status_code=400, detail=f"Failed to load model card: {exc}"
             ) from exc
         instance_combinations: list[tuple[Sharding, InstanceMeta, int]] = []
+        node_count = len(list(self.state.topology.list_nodes()))
         for sharding in (Sharding.Pipeline, Sharding.Tensor):
             for instance_meta in (InstanceMeta.MlxRing, InstanceMeta.MlxJaccl):
                 instance_combinations.extend(
-                    [
-                        (sharding, instance_meta, i)
-                        for i in range(
-                            1, len(list(self.state.topology.list_nodes())) + 1
-                        )
-                    ]
+                    [(sharding, instance_meta, i) for i in range(1, node_count + 1)]
                 )
+        instance_combinations.extend(
+            (sharding, InstanceMeta.Tinygrad, i)
+            for sharding in (Sharding.Pipeline, Sharding.Tensor)
+            for i in range(1, node_count + 1)
+        )
         # TODO: PDD
         # instance_combinations.append((Sharding.PrefillDecodeDisaggregation, InstanceMeta.MlxRing, 1))
 
@@ -597,7 +605,11 @@ class API:
 
             memory_delta_by_node: dict[str, int] = {}
             if placement_node_ids:
-                total_bytes = model_card.storage_size.in_bytes
+                total_bytes = (
+                    model_placement_bytes(model_card)
+                    if instance_meta is InstanceMeta.Tinygrad
+                    else model_card.storage_size.in_bytes
+                )
                 per_node = total_bytes // len(placement_node_ids)
                 remainder = total_bytes % len(placement_node_ids)
                 for index, node_id in enumerate(sorted(placement_node_ids, key=str)):
@@ -1783,9 +1795,25 @@ class API:
 
         return total_available
 
+    def _advertised_backends(self) -> tuple[Backend, ...]:
+        return tuple(
+            backend
+            for node_backends in self.state.node_backends.values()
+            for backend in node_backends
+        )
+
     async def get_models(self, status: str | None = Query(default=None)) -> ModelList:
-        """Returns list of available models, optionally filtered by being downloaded."""
-        cards = await model_cards.card_cache.list_all()
+        """Return catalogue cards the cluster's advertised backends can run.
+
+        A downloaded-only request still applies that filter after the backend
+        filter. No advertised backend returns the full catalogue.
+        """
+        advertised = self._advertised_backends()
+        cards = [
+            card
+            for card in await model_cards.card_cache.list_all()
+            if model_card_matches_catalogue(card, advertised)
+        ]
 
         if status == "downloaded":
             downloaded_model_ids: set[str] = set()
@@ -1870,7 +1898,13 @@ class API:
     async def search_models(
         self, query: str = "", limit: int = 20
     ) -> list[HuggingFaceSearchResult]:
-        """Search HuggingFace Hub — tries mlx-community first, falls back to all of HuggingFace."""
+        """Search Hugging Face for weights the advertised backends can run.
+
+        MLX clusters search MLX Community, then the rest of the Hub when that
+        author has no hits. GGUF clusters search the ``gguf`` tag and do not
+        fall back to MLX weights. A cluster that advertises both interleaves
+        the two queries.
+        """
         from huggingface_hub import ModelInfo, list_models
 
         def _to_results(models: Iterable[ModelInfo]) -> list[HuggingFaceSearchResult]:
@@ -1886,26 +1920,56 @@ class API:
                 for m in models
             ]
 
-        # Search mlx-community first
-        mlx_results = _to_results(
-            list_models(
-                search=query or None,
-                author="mlx-community",
-                sort="downloads",
-                limit=limit,
+        def _search(spec: CatalogueSearch) -> list[HuggingFaceSearchResult]:
+            if spec.huggingface_filter is None:
+                return _to_results(
+                    list_models(
+                        search=query or None,
+                        author=spec.author or "mlx-community",
+                        sort="downloads",
+                        limit=limit,
+                    )
+                )
+            return _to_results(
+                list_models(
+                    search=query or None,
+                    filter=spec.huggingface_filter,
+                    sort="downloads",
+                    limit=limit,
+                )
             )
-        )
-        if mlx_results:
-            return mlx_results
 
-        # Fall back to searching all of HuggingFace
-        return _to_results(
-            list_models(
-                search=query or None,
-                sort="downloads",
-                limit=limit,
-            )
+        searches: tuple[CatalogueSearch, ...] = catalogue_searches(
+            self._advertised_backends()
         )
+        if len(searches) == 1 and searches[0].author == "mlx-community":
+            mlx_results = _search(searches[0])
+            if mlx_results:
+                return mlx_results
+            return _to_results(
+                list_models(
+                    search=query or None,
+                    sort="downloads",
+                    limit=limit,
+                )
+            )
+
+        seen: set[str] = set()
+        merged: list[HuggingFaceSearchResult] = []
+        columns = [_search(spec) for spec in searches]
+        depth = max((len(column) for column in columns), default=0)
+        for index in range(depth):
+            for column in columns:
+                if index >= len(column):
+                    continue
+                item = column[index]
+                if item.id in seen:
+                    continue
+                seen.add(item.id)
+                merged.append(item)
+                if len(merged) == limit:
+                    return merged
+        return merged
 
     async def run(self):
         shutdown_ev = anyio.Event()

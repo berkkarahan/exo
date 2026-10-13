@@ -5,6 +5,7 @@ from tinygrad.dtype import DType
 class Tensor:
     shape: tuple[int, ...]
     dtype: DType
+    device: str
 
     def __init__(
         self,

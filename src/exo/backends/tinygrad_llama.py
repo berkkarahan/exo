@@ -8,7 +8,7 @@ module does not import it.
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import final
 
@@ -68,6 +68,7 @@ class LoadedShard:
     language_model_head: Tensor | None
     is_first_layer: bool
     is_last_layer: bool
+    tensor_parallel_world_size: int = 1
 
 
 @final
@@ -400,10 +401,17 @@ def _masked_attention_scores(scores: Tensor, past_length: int) -> Tensor:
     return allowed.where(scores.float(), negative)
 
 
-def _swiglu(hidden_state: Tensor, multilayer: MultilayerPerceptronParameters) -> Tensor:
+def _swiglu(
+    hidden_state: Tensor,
+    multilayer: MultilayerPerceptronParameters,
+    all_reduce: Callable[[Tensor], Tensor] | None = None,
+) -> Tensor:
     gate = _project(hidden_state, multilayer.gate_projection, None).silu()
     up_projection = _project(hidden_state, multilayer.up_projection, None)
-    return _project(gate * up_projection, multilayer.down_projection, None)
+    projected = (gate * up_projection).matmul(multilayer.down_projection.transpose())
+    if all_reduce is not None:
+        projected = all_reduce(projected)
+    return projected
 
 
 def _attention(
@@ -412,6 +420,7 @@ def _attention(
     architecture: TransformerArchitecture,
     cached_keys: Tensor | None,
     cached_values: Tensor | None,
+    all_reduce: Callable[[Tensor], Tensor] | None = None,
 ) -> tuple[Tensor, Tensor, Tensor]:
     attention = layer.attention
     head_dimension = architecture.resolved_head_dimension()
@@ -461,7 +470,11 @@ def _attention(
     weights = masked.softmax(axis=-1)
     attended = weights.matmul(repeated_values.float())
     merged = _merge_heads(attended).cast(activation_dtype)
-    output = _project(merged, attention.output_projection, attention.output_bias)
+    output = merged.matmul(attention.output_projection.transpose())
+    if all_reduce is not None:
+        output = all_reduce(output)
+    if attention.output_bias is not None:
+        output = output + attention.output_bias
     return output.cast(activation_dtype), updated_keys, updated_values
 
 
@@ -471,6 +484,7 @@ def forward_llama_decoder_layer(
     architecture: TransformerArchitecture,
     cached_keys: Tensor | None,
     cached_values: Tensor | None,
+    all_reduce: Callable[[Tensor], Tensor] | None = None,
 ) -> tuple[Tensor, Tensor, Tensor]:
     """Run one Llama block and return the realized hidden state plus cache.
 
@@ -483,7 +497,7 @@ def forward_llama_decoder_layer(
         hidden_state, layer.input_norm_weight, architecture.rms_norm_eps
     )
     attention_output, keys, values = _attention(
-        normalized, layer, architecture, cached_keys, cached_values
+        normalized, layer, architecture, cached_keys, cached_values, all_reduce
     )
     residual = hidden_state.float() + attention_output.float()
     multilayer_input = root_mean_square_normalize(
@@ -491,7 +505,9 @@ def forward_llama_decoder_layer(
         layer.post_attention_norm_weight,
         architecture.rms_norm_eps,
     )
-    multilayer_output = _swiglu(multilayer_input, layer.multilayer_perceptron)
+    multilayer_output = _swiglu(
+        multilayer_input, layer.multilayer_perceptron, all_reduce
+    )
     updated = (
         (residual + multilayer_output.float())
         .cast(activation_dtype)
@@ -507,22 +523,23 @@ def forward_shard_layer(
     architecture: TransformerArchitecture,
     cached_keys: Tensor | None,
     cached_values: Tensor | None,
+    all_reduce: Callable[[Tensor], Tensor] | None = None,
 ) -> tuple[Tensor, Tensor, Tensor]:
     """Dispatch one layer to the Llama, Qwen2, or Qwen3 block."""
     if architecture.model_type == "qwen3":
         from exo.backends.tinygrad_qwen import forward_qwen3_decoder_layer
 
         return forward_qwen3_decoder_layer(
-            hidden_state, layer, architecture, cached_keys, cached_values
+            hidden_state, layer, architecture, cached_keys, cached_values, all_reduce
         )
     if architecture.model_type == "qwen2":
         from exo.backends.tinygrad_qwen import forward_qwen2_decoder_layer
 
         return forward_qwen2_decoder_layer(
-            hidden_state, layer, architecture, cached_keys, cached_values
+            hidden_state, layer, architecture, cached_keys, cached_values, all_reduce
         )
     return forward_llama_decoder_layer(
-        hidden_state, layer, architecture, cached_keys, cached_values
+        hidden_state, layer, architecture, cached_keys, cached_values, all_reduce
     )
 
 
@@ -572,8 +589,13 @@ def forward_loaded_shard(
     loaded_shard: LoadedShard,
     cache: LocalKeyValueCache,
     hidden_state: Tensor,
+    all_reduce: Callable[[Tensor], Tensor] | None = None,
 ) -> Tensor:
-    """Run every layer assigned to this rank, appending to ``cache``."""
+    """Run every layer assigned to this rank, appending to ``cache``.
+
+    ``all_reduce`` sums row-parallel attention and MLP outputs across tensor
+    parallel ranks. Pipeline ranks leave it unset.
+    """
     tensor = hidden_state
     for layer_offset, layer in enumerate(loaded_shard.layers):
         cached_keys, cached_values = cache.cached(layer_offset)
@@ -583,6 +605,7 @@ def forward_loaded_shard(
             loaded_shard.architecture,
             cached_keys,
             cached_values,
+            all_reduce,
         )
         cache.store(layer_offset, keys, values)
     return tensor

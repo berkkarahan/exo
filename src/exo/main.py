@@ -4,7 +4,6 @@ import os
 import signal
 import sys
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Self
 
 import anyio
@@ -31,29 +30,9 @@ from exo.utils.task_group import TaskGroup
 from exo.worker.main import Worker
 
 if sys.platform == "win32":
-    # ponytail: exo_rs.Pidfile is POSIX-only (flock via flopen). filelock is already a
-    # base dependency and gives the same single-instance guard. Ceiling: no as_raw_fd(),
-    # so --legacy-daemon stays POSIX-only — spec 006 owns Windows service supervision.
-    from filelock import FileLock, Timeout
-
-    class PidfileError(Exception):
-        pass
-
-    class Pidfile:
-        def __init__(self, path: Path, _mode: int) -> None:
-            self._path = path
-            self._lock = FileLock(path.with_suffix(".lock"), timeout=0)
-            try:
-                self._lock.acquire()
-            except Timeout as e:
-                raise PidfileError(f"exo is already running (locked {path})") from e
-
-        def write(self) -> None:
-            _ = self._path.write_text(str(os.getpid()))
-
-        def close(self) -> None:
-            self._lock.release()
-            self._path.unlink(missing_ok=True)
+    # exo_rs.Pidfile is POSIX-only. No as_raw_fd(), so --legacy-daemon stays
+    # POSIX-only; spec 006 owns Windows service supervision.
+    from exo.utils.windows_pidfile import Pidfile, PidfileError
 else:
     from exo_rs import Pidfile, PidfileError
 

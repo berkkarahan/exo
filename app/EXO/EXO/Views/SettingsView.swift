@@ -15,6 +15,7 @@ struct SettingsView: View {
     @State private var pendingHFEndpoint: String = ""
     @State private var pendingEnableImageModels = false
     @State private var pendingOfflineMode = false
+    @State private var pendingInferenceRuntime = "mlx"
     @State private var pendingFastSynchEnabled = false
     @State private var pendingDefaultModelsDir: String = ""
     @State private var pendingAdditionalModelsDirs: String = ""
@@ -53,6 +54,7 @@ struct SettingsView: View {
             pendingHFEndpoint = controller.hfEndpoint
             pendingEnableImageModels = controller.enableImageModels
             pendingOfflineMode = controller.offlineMode
+            pendingInferenceRuntime = controller.inferenceRuntime
             pendingFastSynchEnabled = controller.fastSynchEnabled
             pendingDefaultModelsDir = controller.defaultModelsDir
             pendingAdditionalModelsDirs = controller.additionalModelsDirs
@@ -104,6 +106,18 @@ struct SettingsView: View {
                 Text("Skip internet checks and use only locally available models.")
                     .font(.caption)
                     .foregroundColor(.secondary)
+            }
+
+            Section {
+                Picker("Inference Backend", selection: $pendingInferenceRuntime) {
+                    Text("mlx").tag("mlx")
+                    Text("tinygrad").tag("tinygrad")
+                }
+                Text(
+                    "Choose tinygrad to join a Windows cluster. A Windows node can join this Mac only when tinygrad is selected."
+                )
+                .font(.caption)
+                .foregroundColor(.secondary)
             }
 
             Section {
@@ -603,6 +617,7 @@ struct SettingsView: View {
         pendingNamespace != controller.customNamespace || pendingHFToken != controller.hfToken
             || pendingHFEndpoint != controller.hfEndpoint
             || pendingOfflineMode != controller.offlineMode
+            || pendingInferenceRuntime != controller.inferenceRuntime
     }
 
     private var hasModelChanges: Bool {
@@ -625,6 +640,7 @@ struct SettingsView: View {
         controller.hfToken = pendingHFToken
         controller.hfEndpoint = pendingHFEndpoint
         controller.offlineMode = pendingOfflineMode
+        controller.inferenceRuntime = pendingInferenceRuntime
         restartIfRunning()
     }
 

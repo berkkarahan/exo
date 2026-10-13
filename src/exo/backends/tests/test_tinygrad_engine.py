@@ -46,7 +46,7 @@ def test_device_map_covers_the_placement_registry() -> None:
     assert tinygrad_device_name_for_backend(Backend.TinygradMetal) == "METAL"
     assert tinygrad_device_name_for_backend(Backend.TinygradCuda) == "CUDA"
     assert tinygrad_device_name_for_backend(Backend.TinygradCpu) == "CPU"
-    assert tinygrad_device_name_for_backend(Backend.WinAMD) == "AMD"
+    assert tinygrad_device_name_for_backend(Backend.WinAMD) == "CL"
     assert tinygrad_device_name_for_backend(Backend.WinCUDA) == "CUDA"
     assert tinygrad_device_name_for_backend(Backend.WinCPU) == "CPU"
 
@@ -191,9 +191,64 @@ async def test_windows_node_joins_as_win_amd(monkeypatch: pytest.MonkeyPatch) ->
         "exo.utils.info_gatherer.info_gatherer._has_directml_adapter",
         lambda: False,
     )
+    monkeypatch.setattr(
+        "exo.backends.tinygrad_opencl.windows_opencl_is_usable",
+        lambda: True,
+    )
     gathered = await NodeBackends.gather()
     assert gathered.backends == [Backend.WinAMD, Backend.OnnxCpu]
     assert Backend.MlxCpu not in gathered.backends
+
+
+async def test_windows_node_falls_back_to_win_cpu_when_the_opencl_probe_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.delenv("EXO_TINYGRAD_DEVICES", raising=False)
+    monkeypatch.setattr(
+        "exo.utils.info_gatherer.info_gatherer._windows_adapter_names",
+        lambda: ["AMD Radeon RX 9070 XT"],
+    )
+    monkeypatch.setattr(
+        "exo.utils.info_gatherer.info_gatherer._has_nvml_cuda",
+        lambda: False,
+    )
+    monkeypatch.setattr(
+        "exo.utils.info_gatherer.info_gatherer._has_directml_adapter",
+        lambda: False,
+    )
+    monkeypatch.setattr(
+        "exo.backends.tinygrad_opencl.windows_opencl_is_usable",
+        lambda: False,
+    )
+    gathered = await NodeBackends.gather()
+    assert gathered.backends == [Backend.WinCPU, Backend.OnnxCpu]
+
+
+async def test_windows_node_drops_win_amd_when_the_opencl_probe_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.delenv("EXO_TINYGRAD_DEVICES", raising=False)
+    monkeypatch.setattr(
+        "exo.utils.info_gatherer.info_gatherer._windows_adapter_names",
+        lambda: ["AMD Radeon RX 9070 XT", "NVIDIA GeForce RTX 4090"],
+    )
+    monkeypatch.setattr(
+        "exo.utils.info_gatherer.info_gatherer._has_nvml_cuda",
+        lambda: False,
+    )
+    monkeypatch.setattr(
+        "exo.utils.info_gatherer.info_gatherer._has_directml_adapter",
+        lambda: False,
+    )
+    monkeypatch.setattr(
+        "exo.backends.tinygrad_opencl.windows_opencl_is_usable",
+        lambda: False,
+    )
+    gathered = await NodeBackends.gather()
+    assert gathered.backends == [Backend.WinCUDA, Backend.OnnxCpu]
+    assert Backend.WinAMD not in gathered.backends
 
 
 async def test_windows_node_joins_as_win_cuda_from_the_environment(

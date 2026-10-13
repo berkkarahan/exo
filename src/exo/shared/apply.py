@@ -4,7 +4,9 @@ from datetime import datetime
 
 from loguru import logger
 
+from exo.shared.cluster_runtime import node_may_join_cluster
 from exo.shared.models.model_cards import ModelCard
+from exo.shared.types.backends import Backend
 from exo.shared.types.common import ModelId, NodeId
 from exo.shared.types.events import (
     ChunkGenerated,
@@ -348,9 +350,21 @@ def apply_node_timed_out(event: NodeTimedOut, state: State) -> State:
 
 
 def apply_node_gathered_info(event: NodeGatheredInfo, state: State) -> State:
+    info = event.info
+    if isinstance(info, NodeBackends):
+        other_members = [
+            backends
+            for node_id, backends in state.node_backends.items()
+            if node_id != event.node_id
+        ]
+        if not node_may_join_cluster(info.backends, other_members):
+            return _refuse_incompatible_node(event.node_id, info.backends, state)
+        state = _clear_refused_node(event.node_id, state)
+    elif event.node_id in state.refused_node_backends:
+        return state
+
     topology = copy.deepcopy(state.topology)
     topology.add_node(event.node_id)
-    info = event.info
 
     # Build update dict with only the mappings that change
     update: dict[str, object] = {
@@ -468,6 +482,100 @@ def apply_node_gathered_info(event: NodeGatheredInfo, state: State) -> State:
             }
 
     return state.model_copy(update=update)
+
+
+def _clear_refused_node(node_id: NodeId, state: State) -> State:
+    if node_id not in state.refused_node_backends:
+        return state
+    return state.model_copy(
+        update={
+            "refused_node_backends": {
+                key: value
+                for key, value in state.refused_node_backends.items()
+                if key != node_id
+            }
+        }
+    )
+
+
+def _refuse_incompatible_node(
+    node_id: NodeId,
+    backends: list[Backend],
+    state: State,
+) -> State:
+    """Drop ``node_id`` and remember the backends that failed the join check.
+
+    A Mac that advertises MLX stays out of a Windows cluster. A Windows node
+    stays out of a Mac cluster that was started with MLX. The next
+    ``NodeBackends`` event is checked again, so choosing tinygrad and
+    restarting can admit the same node.
+    """
+    topology = copy.deepcopy(state.topology)
+    topology.remove_node(node_id)
+    node_thunderbolt_bridge = {
+        key: value
+        for key, value in state.node_thunderbolt_bridge.items()
+        if key != node_id
+    }
+    node_network = {
+        key: value for key, value in state.node_network.items() if key != node_id
+    }
+    leaving_node_status = state.node_thunderbolt_bridge.get(node_id)
+    leaving_node_had_tb_enabled = (
+        leaving_node_status is not None and leaving_node_status.enabled
+    )
+    thunderbolt_bridge_cycles = (
+        topology.get_thunderbolt_bridge_cycles(node_thunderbolt_bridge, node_network)
+        if leaving_node_had_tb_enabled
+        else [list(cycle) for cycle in state.thunderbolt_bridge_cycles]
+    )
+    return state.model_copy(
+        update={
+            "topology": topology,
+            "last_seen": {
+                key: value for key, value in state.last_seen.items() if key != node_id
+            },
+            "downloads": {
+                key: value for key, value in state.downloads.items() if key != node_id
+            },
+            "node_identities": {
+                key: value
+                for key, value in state.node_identities.items()
+                if key != node_id
+            },
+            "node_memory": {
+                key: value for key, value in state.node_memory.items() if key != node_id
+            },
+            "node_disk": {
+                key: value for key, value in state.node_disk.items() if key != node_id
+            },
+            "node_system": {
+                key: value for key, value in state.node_system.items() if key != node_id
+            },
+            "node_network": node_network,
+            "node_thunderbolt": {
+                key: value
+                for key, value in state.node_thunderbolt.items()
+                if key != node_id
+            },
+            "node_thunderbolt_bridge": node_thunderbolt_bridge,
+            "node_rdma_ctl": {
+                key: value
+                for key, value in state.node_rdma_ctl.items()
+                if key != node_id
+            },
+            "node_backends": {
+                key: value
+                for key, value in state.node_backends.items()
+                if key != node_id
+            },
+            "refused_node_backends": {
+                **state.refused_node_backends,
+                node_id: backends,
+            },
+            "thunderbolt_bridge_cycles": thunderbolt_bridge_cycles,
+        }
+    )
 
 
 def apply_topology_edge_created(event: TopologyEdgeCreated, state: State) -> State:

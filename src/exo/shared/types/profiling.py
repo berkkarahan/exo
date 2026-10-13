@@ -9,22 +9,94 @@ from exo.shared.types.memory import Memory
 from exo.shared.types.thunderbolt import ThunderboltIdentifier
 from exo.utils.pydantic_ext import FrozenModel
 
+type MemoryEstimateSource = Literal[
+    "psutil",
+    "opencl-global",
+    "opencl-amd-free",
+    "override",
+    "rocm-smi",
+    "nvidia-smi",
+    "unavailable",
+]
+
+
+class AcceleratorMemorySample(FrozenModel):
+    """Device capacity kept apart from the host RAM reading.
+
+    ``free_sample`` is the probe's number. ``ceiling`` is capacity minus
+    placements this process has reserved. ``estimate_source`` names which
+    reading produced the available bytes placement uses.
+    """
+
+    capacity: Memory
+    free_sample: Memory
+    max_allocation: Memory | None = None
+    host_ram_total: Memory
+    host_ram_available: Memory
+    reserved: Memory
+    ceiling: Memory
+    estimate_source: MemoryEstimateSource
+    driver_version: str = ""
+
+
+def accelerator_sample_from_bytes(
+    *,
+    capacity_bytes: int,
+    free_sample_bytes: int,
+    max_allocation_bytes: int | None,
+    host_ram_total_bytes: int,
+    host_ram_available_bytes: int,
+    reserved_bytes: int,
+    estimate_source: MemoryEstimateSource,
+    driver_version: str,
+) -> AcceleratorMemorySample:
+    """Build a sample. ``ceiling`` is capacity minus ``reserved_bytes``."""
+    return AcceleratorMemorySample(
+        capacity=Memory.from_bytes(capacity_bytes),
+        free_sample=Memory.from_bytes(free_sample_bytes),
+        max_allocation=(
+            None
+            if max_allocation_bytes is None
+            else Memory.from_bytes(max_allocation_bytes)
+        ),
+        host_ram_total=Memory.from_bytes(host_ram_total_bytes),
+        host_ram_available=Memory.from_bytes(host_ram_available_bytes),
+        reserved=Memory.from_bytes(reserved_bytes),
+        ceiling=Memory.from_bytes(max(capacity_bytes - reserved_bytes, 0)),
+        estimate_source=estimate_source,
+        driver_version=driver_version,
+    )
+
+
+def host_ram_bytes() -> tuple[int, int]:
+    """Return ``(total, available)`` host RAM from psutil."""
+    virtual = psutil.virtual_memory()
+    return virtual.total, virtual.available
+
 
 class MemoryUsage(FrozenModel):
     ram_total: Memory
     ram_available: Memory
     swap_total: Memory
     swap_available: Memory
+    accelerator: AcceleratorMemorySample | None = None
 
     @classmethod
     def from_bytes(
-        cls, *, ram_total: int, ram_available: int, swap_total: int, swap_available: int
+        cls,
+        *,
+        ram_total: int,
+        ram_available: int,
+        swap_total: int,
+        swap_available: int,
+        accelerator: AcceleratorMemorySample | None = None,
     ) -> Self:
         return cls(
             ram_total=Memory.from_bytes(ram_total),
             ram_available=Memory.from_bytes(ram_available),
             swap_total=Memory.from_bytes(swap_total),
             swap_available=Memory.from_bytes(swap_available),
+            accelerator=accelerator,
         )
 
     @classmethod

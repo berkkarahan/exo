@@ -16,6 +16,7 @@
   type InstanceWrapper = {
     MlxRingInstance?: Instance;
     MlxJacclInstance?: Instance;
+    TinygradInstance?: Instance;
     VllmInstance?: Instance;
   };
 
@@ -46,6 +47,7 @@
       const inst =
         wrapper.MlxRingInstance ??
         wrapper.MlxJacclInstance ??
+        wrapper.TinygradInstance ??
         wrapper.VllmInstance;
       const modelId = inst?.shardAssignments?.modelId ?? "";
       const nodeToRunner = inst?.shardAssignments?.nodeToRunner ?? {};

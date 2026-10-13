@@ -64,6 +64,7 @@
     thunderboltBridgeCycles,
     nodeThunderboltBridge,
     nodeIdentities,
+    nodeBackends,
     isConnected,
     type DownloadProgress,
     type PlacementPreview,
@@ -701,8 +702,15 @@
     const nodeCount = topologyData()
       ? Object.keys(topologyData()!.nodes).length
       : 1;
-    const sharding = nodeCount <= 1 ? "Pipeline" : selectedSharding;
-    const instanceType = nodeCount <= 1 ? "MlxRing" : selectedInstanceType;
+    const sharding =
+      clusterHasOnlyTinygradBackends() || nodeCount <= 1
+        ? "Pipeline"
+        : selectedSharding;
+    const instanceType = clusterHasOnlyTinygradBackends()
+      ? "Tinygrad"
+      : nodeCount <= 1
+        ? "MlxRing"
+        : selectedInstanceType;
     try {
       const placementResponse = await fetch(
         `/instance/placement?model_id=${encodeURIComponent(modelId)}&sharding=${sharding}&instance_meta=${instanceType}&min_nodes=1`,
@@ -886,7 +894,25 @@
   }
 
   let selectedSharding = $state<"Pipeline" | "Tensor">("Pipeline");
-  type InstanceMeta = "MlxRing" | "MlxJaccl";
+  type InstanceMeta = "MlxRing" | "MlxJaccl" | "Tinygrad";
+  const TINYGRAD_BACKENDS = new Set([
+    "WinAMD",
+    "WinCUDA",
+    "WinCPU",
+    "TinygradAmd",
+    "TinygradMetal",
+    "TinygradCuda",
+    "TinygradCpu",
+  ]);
+
+  function clusterHasOnlyTinygradBackends(): boolean {
+    const names = Object.values(nodeBackends()).flat();
+    if (names.length === 0) return false;
+    return (
+      names.some((name) => TINYGRAD_BACKENDS.has(name)) &&
+      !names.includes("MLX")
+    );
+  }
 
   // Launch defaults persistence
   const LAUNCH_DEFAULTS_KEY = "exo-launch-defaults-v2";
@@ -932,7 +958,13 @@
     // Apply sharding and instance type unconditionally
     selectedSharding = defaults.sharding;
     selectedInstanceType =
-      defaults.instanceType === "MlxRing" ? "MlxRing" : "MlxJaccl";
+      defaults.instanceType === "Tinygrad" || defaults.instanceType === "MlxRing"
+        ? defaults.instanceType
+        : "MlxJaccl";
+    if (clusterHasOnlyTinygradBackends()) {
+      selectedInstanceType = "Tinygrad";
+      selectedSharding = "Pipeline";
+    }
 
     // Apply minNodes if valid (between 1 and maxNodes)
     if (
@@ -954,6 +986,17 @@
   }
 
   let selectedInstanceType = $state<InstanceMeta>("MlxRing");
+  let userChoseRuntime = $state(false);
+  const clusterPrefersTinygrad = $derived(clusterHasOnlyTinygradBackends());
+
+  $effect(() => {
+    if (userChoseRuntime || !clusterPrefersTinygrad) return;
+    if (selectedInstanceType === "Tinygrad" && selectedSharding === "Pipeline")
+      return;
+    selectedInstanceType = "Tinygrad";
+    selectedSharding = "Pipeline";
+    saveLaunchDefaults();
+  });
   let selectedMinNodes = $state<number>(1);
   let minNodesInitialized = $state(false);
   let launchingModelId = $state<string | null>(null);
@@ -1146,9 +1189,7 @@
   }
 
   const matchesSelectedRuntime = (runtime: InstanceMeta): boolean =>
-    selectedInstanceType === "MlxRing"
-      ? runtime === "MlxRing"
-      : runtime === "MlxJaccl";
+    runtime === selectedInstanceType;
 
   // Helper to check if a model can be launched (has valid placement with >= minNodes)
   function canModelFit(modelId: string): boolean {
@@ -1291,9 +1332,17 @@
     return tags;
   });
 
+  let catalogueBackendKey = $state<string | null>(null);
+
+  $effect(() => {
+    const key = Object.values(nodeBackends()).flat().sort().join("\0");
+    if (key === catalogueBackendKey) return;
+    catalogueBackendKey = key;
+    void fetchModels();
+  });
+
   onMount(async () => {
     mounted = true;
-    fetchModels();
     fetch("/node_id")
       .then((r) => (r.ok ? r.json() : null))
       .then((id) => {
@@ -1890,7 +1939,11 @@
     const inst = instance as {
       shardAssignments?: { runnerToShard?: Record<string, unknown> };
     };
-    const runnerIds = Object.keys(inst.shardAssignments?.runnerToShard || {});
+    const runnerToShard = inst.shardAssignments?.runnerToShard || {};
+    const runnerIds = Object.keys(runnerToShard);
+    const isTensor =
+      instanceTag === "MlxJacclInstance" ||
+      instanceShardType(instance as Record<string, unknown>) === "Tensor";
 
     const statuses = runnerIds
       .map((rid) => {
@@ -1923,7 +1976,6 @@
     if (has("Loading")) {
       // Tensor parallel: each runner loads all layers — use max/min (bottleneck)
       // Pipeline parallel: each runner loads a disjoint slice — use sum
-      const isTensor = instanceTag === "MlxJacclInstance";
       let layersLoaded = isTensor ? Infinity : 0;
       let totalLayers = 0;
       for (const rid of runnerIds) {
@@ -2066,6 +2118,7 @@
     let instanceType = "Unknown";
     if (instanceTag === "MlxRingInstance") instanceType = "MLX Ring";
     else if (instanceTag === "MlxJacclInstance") instanceType = "MLX RDMA";
+    else if (instanceTag === "TinygradInstance") instanceType = "Tinygrad";
 
     const inst = instance as {
       shardAssignments?: {
@@ -2191,6 +2244,22 @@
     return { label: "?", missing: true };
   }
 
+  function instanceShardType(
+    instance: Record<string, unknown>,
+  ): "Pipeline" | "Tensor" {
+    const runnerToShard =
+      (
+        instance.shardAssignments as
+          | { runnerToShard?: Record<string, unknown> }
+          | undefined
+      )?.runnerToShard || {};
+    for (const shardWrapped of Object.values(runnerToShard)) {
+      const [tag] = getTagged(shardWrapped);
+      if (tag === "TensorShardMetadata") return "Tensor";
+    }
+    return "Pipeline";
+  }
+
   function getOrderedRunnerNodes(
     instance: Record<string, unknown>,
     shardType: "Pipeline" | "Tensor",
@@ -2314,11 +2383,15 @@
       return rows;
     }
 
-    // Ring – derive ring order from pipeline shard ranks and pick host IPs from hostsByNode
-    if (instanceTag === "MlxRingInstance") {
+    // Ring and Tinygrad pipeline share host maps. A single Tinygrad node has no socket.
+    if (
+      instanceTag === "MlxRingInstance" ||
+      instanceTag === "TinygradInstance"
+    ) {
+      const record = instance as Record<string, unknown>;
       const ordered = getOrderedRunnerNodes(
-        instance as Record<string, unknown>,
-        "Pipeline",
+        record,
+        instanceShardType(record),
       );
       const hostsByNode =
         (
@@ -2334,6 +2407,7 @@
         missingIface: boolean;
       }> = [];
       if (ordered.length === 0) return rows;
+      if (instanceTag === "TinygradInstance" && ordered.length < 2) return rows;
 
       for (let idx = 0; idx < ordered.length; idx++) {
         const current = ordered[idx];
@@ -2731,6 +2805,13 @@
       .filter((p) => p.instance_meta === "MlxRing" && p.sharding === "Pipeline")
       .sort((a, b) => getPreviewNodeCount(a) - getPreviewNodeCount(b));
     if (ringPipeline.length > 0) return ringPipeline[0];
+
+    const tinygradPipeline = valid
+      .filter(
+        (p) => p.instance_meta === "Tinygrad" && p.sharding === "Pipeline",
+      )
+      .sort((a, b) => getPreviewNodeCount(a) - getPreviewNodeCount(b));
+    if (tinygradPipeline.length > 0) return tinygradPipeline[0];
 
     // Last resort: any valid placement, fewest nodes
     return (
@@ -5751,10 +5832,11 @@
                       </button>
                       <button
                         onclick={() => {
+                          userChoseRuntime = true;
                           selectedSharding = "Tensor";
                           saveLaunchDefaults();
                         }}
-                        class="flex items-center gap-2 py-1.5 px-3 text-xs font-mono border rounded transition-all duration-200 cursor-pointer {selectedSharding ===
+                        class="flex items-center gap-2 py-1.5 px-3 text-xs font-mono border rounded transition-all duration-200 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 {selectedSharding ===
                         'Tensor'
                           ? 'bg-transparent text-exo-yellow border-exo-yellow'
                           : 'bg-transparent text-white/70 border-exo-medium-gray/50 hover:border-exo-yellow/50'}"
@@ -5775,14 +5857,15 @@
                     </div>
                   </div>
 
-                  <!-- Interconnect -->
+                  <!-- Runtime -->
                   <div>
                     <div class="text-xs text-white/50 font-mono mb-2">
-                      Interconnect:
+                      Runtime:
                     </div>
-                    <div class="flex gap-2">
+                    <div class="flex flex-wrap gap-2">
                       <button
                         onclick={() => {
+                          userChoseRuntime = true;
                           selectedInstanceType = "MlxRing";
                           saveLaunchDefaults();
                         }}
@@ -5806,6 +5889,7 @@
                       </button>
                       <button
                         onclick={() => {
+                          userChoseRuntime = true;
                           selectedInstanceType = "MlxJaccl";
                           saveLaunchDefaults();
                         }}
@@ -5826,6 +5910,31 @@
                           {/if}
                         </span>
                         RDMA (Fast)
+                      </button>
+                      <button
+                        onclick={() => {
+                          userChoseRuntime = true;
+                          selectedInstanceType = "Tinygrad";
+                          selectedSharding = "Pipeline";
+                          saveLaunchDefaults();
+                        }}
+                        class="flex items-center gap-2 py-1.5 px-3 text-xs font-mono border rounded transition-all duration-200 cursor-pointer {selectedInstanceType ===
+                        'Tinygrad'
+                          ? 'bg-transparent text-exo-yellow border-exo-yellow'
+                          : 'bg-transparent text-white/70 border-exo-medium-gray/50 hover:border-exo-yellow/50'}"
+                      >
+                        <span
+                          class="w-3 h-3 rounded-full border-2 flex items-center justify-center {selectedInstanceType ===
+                          'Tinygrad'
+                            ? 'border-exo-yellow'
+                            : 'border-exo-medium-gray'}"
+                        >
+                          {#if selectedInstanceType === "Tinygrad"}
+                            <span class="w-1.5 h-1.5 rounded-full bg-exo-yellow"
+                            ></span>
+                          {/if}
+                        </span>
+                        Tinygrad
                       </button>
                     </div>
                   </div>

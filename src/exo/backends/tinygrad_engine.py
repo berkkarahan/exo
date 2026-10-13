@@ -34,7 +34,7 @@ Interface map
     ``TinygradMetal``       ``Device.DEFAULT = "METAL"`` (Apple Silicon)
     ``TinygradCuda``        ``Device.DEFAULT = "CUDA"`` (NVIDIA)
     ``TinygradCpu``         ``Device.DEFAULT = "CPU"``
-    ``WinAMD``              Windows join identity, same device as ``AMD``
+    ``WinAMD``              Windows join identity, tinygrad device ``CL``
     ``WinCUDA``             Windows join identity, same device as ``CUDA``
     ``WinCPU``              Windows join identity, same device as ``CPU``
 
@@ -48,11 +48,19 @@ import gc
 import secrets
 import time
 from collections import deque
-from collections.abc import Generator, Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
+from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import TYPE_CHECKING, BinaryIO, Literal, NoReturn, Protocol, final, override
 
+from exo.backends.tinygrad_progress import (
+    DEFAULT_TINYGRAD_PROGRESS_BUDGETS,
+    TinygradProgressBudgets,
+    TinygradProgressDeadlineError,
+    TinygradProgressPhase,
+    progress_budget_seconds,
+    progress_is_overdue,
+)
 from exo.shared.types.backends import Backend
 from exo.shared.types.chunks import Chunk, TokenChunk
 from exo.shared.types.common import ModelId
@@ -72,7 +80,7 @@ from exo.shared.types.worker.runner_response import (
     FinishedResponse,
     ModelLoadingResponse,
 )
-from exo.shared.types.worker.shards import PipelineShardMetadata
+from exo.shared.types.worker.shards import PipelineShardMetadata, TensorShardMetadata
 from exo.utils.channels import MpReceiver, MpSender
 from exo.worker.disaggregated.server import PrefillRequest
 from exo.worker.engines.base import Builder, Engine
@@ -88,7 +96,7 @@ if TYPE_CHECKING:
     )
     from exo.backends.tinygrad_tokenizer import GgufTokenizer
 
-type TinygradDeviceName = Literal["AMD", "METAL", "CUDA", "CPU"]
+type TinygradDeviceName = Literal["AMD", "METAL", "CUDA", "CPU", "CL"]
 
 
 class TaskCancellationReceiver(Protocol):
@@ -104,7 +112,7 @@ TINYGRAD_DEVICE_NAME_BY_BACKEND: Mapping[Backend, TinygradDeviceName] = (
             Backend.TinygradMetal: "METAL",
             Backend.TinygradCuda: "CUDA",
             Backend.TinygradCpu: "CPU",
-            Backend.WinAMD: "AMD",
+            Backend.WinAMD: "CL",
             Backend.WinCUDA: "CUDA",
             Backend.WinCPU: "CPU",
         }
@@ -257,18 +265,31 @@ def assign_tinygrad_default_device(
 ) -> TinygradDeviceName:
     """Assign ``tinygrad.Device.DEFAULT`` from an explicit device name.
 
-    ``"AMD"`` selects ROCm/HIP, including an RX 9700 XT. ``"METAL"`` selects
-    Apple Silicon. ``"CUDA"`` selects NVIDIA. ``"CPU"`` selects the reference
-    device. The host operating system is not read.
+    ``"AMD"`` selects ROCm/HIP. ``"CL"`` selects OpenCL and pins the probed
+    adapter before tinygrad reads its platform-0 device cache. ``"METAL"``
+    selects Apple Silicon. ``"CUDA"`` selects NVIDIA. ``"CPU"`` selects the
+    reference device. The host operating system is not read.
 
     Returns:
         The device name written to ``Device.DEFAULT``.
 
     Raises:
         TinygradDeviceSelectionError: Transformed from ``ImportError`` when
-            the optional tinygrad package is absent. The runner entrypoint
-            handles it by publishing ``RunnerTerminationError``.
+            the optional tinygrad package is absent, or from
+            ``OpenClSelectionError`` when ``"CL"`` has no probed adapter.
+            The runner entrypoint handles it by publishing
+            ``RunnerTerminationError``.
     """
+    if device_name == "CL":
+        from exo.backends.tinygrad_opencl import (
+            OpenClSelectionError,
+            pin_selected_opencl_device,
+        )
+
+        try:
+            pin_selected_opencl_device()
+        except OpenClSelectionError as error:
+            raise TinygradDeviceSelectionError(str(error)) from error
     try:
         from tinygrad import Device
     except ImportError as error:
@@ -361,14 +382,38 @@ class _ActiveGeneration:
     prefill_seconds: float
 
 
-def _pipeline_shard(bound_instance: BoundInstance) -> PipelineShardMetadata:
+def _assigned_shard(
+    bound_instance: BoundInstance,
+) -> PipelineShardMetadata | TensorShardMetadata:
     from exo.backends.tinygrad_weights import TinygradWeightError
 
     shard = bound_instance.bound_shard
-    if isinstance(shard, PipelineShardMetadata):
+    if isinstance(shard, (PipelineShardMetadata, TensorShardMetadata)):
         return shard
     raise TinygradWeightError(
-        f"Tinygrad loading requires a pipeline shard, received {type(shard).__name__}"
+        f"Tinygrad loading requires a pipeline or tensor shard, received {type(shard).__name__}"
+    )
+
+
+def _loader_interval(
+    shard: PipelineShardMetadata | TensorShardMetadata,
+) -> PipelineShardMetadata:
+    """Return the layer interval the checkpoint loader already understands.
+
+    A tensor shard keeps every layer, so the loader sees the same interval.
+    Column and row slices are applied after those tensors are realized.
+    """
+    if isinstance(shard, PipelineShardMetadata):
+        return shard
+    return PipelineShardMetadata(
+        model_card=shard.model_card,
+        device_rank=shard.device_rank,
+        world_size=shard.world_size,
+        immediate_exception=shard.immediate_exception,
+        should_timeout=shard.should_timeout,
+        start_layer=shard.start_layer,
+        end_layer=shard.end_layer,
+        n_layers=shard.n_layers,
     )
 
 
@@ -390,12 +435,16 @@ class TinygradEngine(Engine):
     gguf_tokenizer: GgufTokenizer | None = field(init=False, default=None)
     cancel_receiver: TaskCancellationReceiver | None = field(init=False, default=None)
     pipeline_transport: PipelineTransport | None = field(init=False, default=None)
-    _pipeline_shard_metadata: PipelineShardMetadata | None = field(
-        init=False, default=None
+    _assigned_shard_metadata: PipelineShardMetadata | TensorShardMetadata | None = (
+        field(init=False, default=None)
     )
     _cancelled_tasks: set[TaskId] = field(init=False, default_factory=set)
     _pending_tasks: deque[TextGeneration] = field(init=False, default_factory=deque)
     _active_generation: _ActiveGeneration | None = field(init=False, default=None)
+    progress_budgets: TinygradProgressBudgets = field(
+        default=DEFAULT_TINYGRAD_PROGRESS_BUDGETS
+    )
+    progress_clock: Callable[[], float] = field(default=time.perf_counter)
 
     def __post_init__(self) -> None:
         assign_tinygrad_default_device(self.device_name)
@@ -404,10 +453,10 @@ class TinygradEngine(Engine):
         """Return this device's capacity in the placement ``MemoryUsage`` shape.
 
         The query does not open the device or copy weights. ``METAL`` and
-        ``CPU`` report unified memory through psutil. ``AMD`` and ``CUDA``
-        report free accelerator memory. ``InfoGatherer`` publishes the same
-        value before this engine exists, and the master weights shards with
-        ``ram_available``.
+        ``CPU`` report unified memory through psutil. ``AMD``, ``CUDA``, and
+        ``CL`` report free accelerator memory. ``InfoGatherer`` publishes the
+        same value before this engine exists, and the master weights shards
+        with ``ram_available``.
         """
         from exo.backends.tinygrad_memory import memory_usage_for_device
 
@@ -415,7 +464,7 @@ class TinygradEngine(Engine):
 
     def pin_assigned_layers(
         self, bound_instance: BoundInstance
-    ) -> PipelineShardMetadata:
+    ) -> PipelineShardMetadata | TensorShardMetadata:
         """Drop every realized tensor that is not the commanded layer interval.
 
         Args:
@@ -430,7 +479,7 @@ class TinygradEngine(Engine):
             TinygradWeightError: The runner entrypoint handles this when the
                 placement is not a pipeline shard.
         """
-        shard = _pipeline_shard(bound_instance)
+        shard = _assigned_shard(bound_instance)
         self._release_loaded_graph()
         return shard
 
@@ -438,7 +487,7 @@ class TinygradEngine(Engine):
         self.loaded_shard = None
         self.key_value_cache = None
         self._active_generation = None
-        self._pipeline_shard_metadata = None
+        self._assigned_shard_metadata = None
         gc.collect()
 
     def allocate_weights(self, bound_instance: BoundInstance) -> None:
@@ -461,7 +510,7 @@ class TinygradEngine(Engine):
         from exo.backends.tinygrad_weights import shard_parameter_byte_count
 
         self.parameter_byte_count = shard_parameter_byte_count(
-            _pipeline_shard(bound_instance)
+            _loader_interval(_assigned_shard(bound_instance))
         )
 
     def load_model(self, bound_instance: BoundInstance) -> None:
@@ -513,7 +562,8 @@ class TinygradEngine(Engine):
         )
         from exo.download.huggingface_utils import extract_layer_num
 
-        shard = self.pin_assigned_layers(bound_instance)
+        assigned = self.pin_assigned_layers(bound_instance)
+        shard = _loader_interval(assigned)
         directory = model_directory_for_shard(shard)
         self.model_id = shard.model_card.model_id
         self.gguf_tokenizer = None
@@ -551,9 +601,24 @@ class TinygradEngine(Engine):
                     f"[{shard.start_layer}, {shard.end_layer})"
                 )
         assert_assigned_tensor_shapes(collected, architecture, shard)
-        self.loaded_shard = assemble_loaded_shard(collected, architecture, shard)
-        self.key_value_cache = LocalKeyValueCache(len(self.loaded_shard.layers))
-        self._pipeline_shard_metadata = shard
+        if isinstance(assigned, TensorShardMetadata) and assigned.world_size > 1:
+            from exo.backends.tinygrad_tensor import (
+                architecture_for_tensor_rank,
+                slice_tensor_parallel_parameters,
+            )
+
+            architecture = architecture_for_tensor_rank(
+                architecture, assigned.device_rank, assigned.world_size
+            )
+            collected = slice_tensor_parallel_parameters(
+                collected, assigned.device_rank, assigned.world_size
+            )
+        loaded = assemble_loaded_shard(collected, architecture, shard)
+        if isinstance(assigned, TensorShardMetadata):
+            loaded = replace(loaded, tensor_parallel_world_size=assigned.world_size)
+        self.loaded_shard = loaded
+        self.key_value_cache = LocalKeyValueCache(len(loaded.layers))
+        self._assigned_shard_metadata = assigned
 
     def _require_loaded_shard(self) -> LoadedShard:
         from exo.backends.tinygrad_weights import TinygradWeightError
@@ -612,6 +677,7 @@ class TinygradEngine(Engine):
             self._require_loaded_shard(),
             self._require_key_value_cache(),
             hidden_state_to_tensor(hidden_state),
+            self._tensor_all_reduce(),
         )
         return tensor_to_hidden_state(updated)
 
@@ -639,8 +705,9 @@ class TinygradEngine(Engine):
     def warmup(self) -> None:
         """Compile and run a throwaway forward pass, then drop its cache.
 
-        A multi-rank shard warms only the layers it owns. Nothing is sent to
-        the next rank.
+        A tensor-parallel shard runs every layer and all-reduces the
+        row-parallel outputs. A multi-rank pipeline shard warms only the
+        layers it owns and does not send a hidden state.
 
         Returns:
             None. The key-value cache is empty when this returns.
@@ -651,11 +718,15 @@ class TinygradEngine(Engine):
                 that is both the first and last layer.
             TinygradWeightError: The runner entrypoint handles a missing
                 tokenizer or a forward that runs before the shard is loaded.
+            TinygradProgressDeadlineError: The runner entrypoint handles a compile
+                that exceeds its budget by publishing ``RunnerTerminationError``.
         """
-        shard = self._require_pipeline_shard()
-        if shard.world_size == 1:
+        shard = self._require_assigned_shard()
+        if isinstance(shard, TensorShardMetadata) or shard.world_size == 1:
             self._require_full_shard()
-            _ = self._realize_logits((self._warmup_token_id(),))
+            self._run_with_progress(
+                "compile", lambda: self._realize_logits((self._warmup_token_id(),))
+            )
             self._require_key_value_cache().clear()
             return
         loaded = self._require_loaded_shard()
@@ -666,11 +737,18 @@ class TinygradEngine(Engine):
                 "A multi-rank tinygrad pipeline shard cannot contain every layer"
             )
         if loaded.is_first_layer:
-            _ = self._hidden_state_from_token_ids((self._warmup_token_id(),))
+            self._run_with_progress(
+                "compile",
+                lambda: self._hidden_state_from_token_ids((self._warmup_token_id(),)),
+            )
         else:
-            hidden_state = self.forward_hidden_state(self._warmup_hidden_state())
-            if loaded.is_last_layer:
-                _ = self.project_logits(hidden_state)
+
+            def warm_later_rank() -> None:
+                hidden_state = self.forward_hidden_state(self._warmup_hidden_state())
+                if loaded.is_last_layer:
+                    _ = self.project_logits(hidden_state)
+
+            self._run_with_progress("compile", warm_later_rank)
         self._require_key_value_cache().clear()
 
     @override
@@ -717,10 +795,20 @@ class TinygradEngine(Engine):
                 tokenizer or an empty encoding.
             TinygradPipelineError: The runner entrypoint handles a multi-rank
                 shard whose peer cannot be reached.
+            TinygradProgressDeadlineError: The runner entrypoint handles a prefill,
+                decode, or transport wait that exceeds its budget.
         """
-        shard = self._require_pipeline_shard()
+        shard = self._require_assigned_shard()
+        if isinstance(shard, TensorShardMetadata):
+            return self._step_replicated(publish_chunks=shard.device_rank == 0)
         if shard.world_size > 1:
             return self._step_pipeline()
+        return self._step_replicated(publish_chunks=True)
+
+    def _step_replicated(
+        self, *, publish_chunks: bool
+    ) -> list[tuple[TaskId, Chunk | CancelledResponse | FinishedResponse]]:
+        """Run one full-model step. Rank 0 is the rank that publishes tokens."""
         self._require_full_shard()
         self._collect_cancellations()
         output: list[tuple[TaskId, Chunk | CancelledResponse | FinishedResponse]] = []
@@ -744,7 +832,8 @@ class TinygradEngine(Engine):
             )
         active = self._active_generation
         chunk, finished = self._advance_generation(active)
-        output.append((active.task.task_id, chunk))
+        if publish_chunks:
+            output.append((active.task.task_id, chunk))
         if finished:
             output.append((active.task.task_id, FinishedResponse()))
             self._drop_active_generation()
@@ -794,6 +883,25 @@ class TinygradEngine(Engine):
             )
         return model_id
 
+    def _run_with_progress[T](
+        self, phase: TinygradProgressPhase, work: Callable[[], T]
+    ) -> T:
+        budget_seconds = progress_budget_seconds(self.progress_budgets, phase)
+        started_at = self.progress_clock()
+        if progress_is_overdue(started_at, self.progress_clock(), budget_seconds):
+            raise TinygradProgressDeadlineError(phase, budget_seconds)
+        result = work()
+        if progress_is_overdue(started_at, self.progress_clock(), budget_seconds):
+            raise TinygradProgressDeadlineError(phase, budget_seconds)
+        return result
+
+    def _arm_transport_progress(self) -> None:
+        transport = self.pipeline_transport
+        if transport is None:
+            return
+        transport.transport_budget_seconds = self.progress_budgets.transport_seconds
+        transport.progress_clock = self.progress_clock
+
     def _collect_cancellations(self) -> None:
         receiver = self.cancel_receiver
         if receiver is None:
@@ -803,6 +911,7 @@ class TinygradEngine(Engine):
 
     def _start_generation(self, task: TextGeneration) -> _ActiveGeneration:
         from exo.backends.tinygrad_generate import (
+            agreed_tensor_seed,
             completion_token_limit,
             normalize_stop_strings,
         )
@@ -823,7 +932,11 @@ class TinygradEngine(Engine):
             raise TinygradWeightError("GGUF chat encoding produced no tokens")
         seed = task.task_params.seed
         if seed is None:
-            seed = secrets.randbits(32)
+            assigned = self._assigned_shard_metadata
+            if isinstance(assigned, TensorShardMetadata) and assigned.world_size > 1:
+                seed = agreed_tensor_seed(str(task.task_id))
+            else:
+                seed = secrets.randbits(32)
         return _ActiveGeneration(
             task=task,
             prompt_token_ids=token_ids,
@@ -841,11 +954,18 @@ class TinygradEngine(Engine):
     def _advance_generation(self, active: _ActiveGeneration) -> tuple[TokenChunk, bool]:
         from exo.backends.tinygrad_generate import sample_token_id
 
+        phase: TinygradProgressPhase = (
+            "decode" if active.generated_token_ids else "prefill"
+        )
+
+        def realize() -> list[float]:
+            if not active.generated_token_ids:
+                return self._realize_logits(active.prompt_token_ids)
+            return self._realize_logits((active.generated_token_ids[-1],))
+
+        logits = self._run_with_progress(phase, realize)
         if not active.generated_token_ids:
-            logits = self._realize_logits(active.prompt_token_ids)
             active.prefill_seconds = time.perf_counter() - active.started_at
-        else:
-            logits = self._realize_logits((active.generated_token_ids[-1],))
         token_id = sample_token_id(
             logits,
             temperature=active.task.task_params.temperature,
@@ -892,8 +1012,14 @@ class TinygradEngine(Engine):
             )
         active = self._active_generation
         task_id = active.task.task_id
+        phase: TinygradProgressPhase = (
+            "decode" if active.generated_token_ids else "prefill"
+        )
+        self._arm_transport_progress()
         if loaded.is_first_layer:
-            hidden_state = self._hidden_state_for_active(active)
+            hidden_state = self._run_with_progress(
+                phase, lambda: self._hidden_state_for_active(active)
+            )
             transport.send_hidden_state(task_id, hidden_state)
             result = transport.receive_token_result(task_id)
             if result is None:
@@ -903,14 +1029,19 @@ class TinygradEngine(Engine):
             chunk, finished = self._chunk_from_remote_token(active, result)
             output.append((task_id, chunk))
         else:
-            hidden_state = transport.receive_hidden_state(task_id)
-            if hidden_state is None:
+            received = transport.receive_hidden_state(task_id)
+            if received is None:
                 output.append((task_id, CancelledResponse()))
                 self._drop_active_generation()
                 return output
-            hidden_state = self.forward_hidden_state(hidden_state)
+            hidden_state = self._run_with_progress(
+                phase, lambda: self.forward_hidden_state(received)
+            )
             if loaded.is_last_layer:
-                result = self._sample_pipeline_token(active, hidden_state)
+                result = self._run_with_progress(
+                    phase,
+                    lambda: self._sample_pipeline_token(active, hidden_state),
+                )
                 transport.send_token_result(task_id, result)
                 finished = result.finish_reason is not None
             else:
@@ -1041,15 +1172,41 @@ class TinygradEngine(Engine):
         )
         return chunk, finish_reason is not None
 
-    def _require_pipeline_shard(self) -> PipelineShardMetadata:
+    def _require_assigned_shard(
+        self,
+    ) -> PipelineShardMetadata | TensorShardMetadata:
         from exo.backends.tinygrad_weights import TinygradWeightError
 
-        shard = self._pipeline_shard_metadata
+        shard = self._assigned_shard_metadata
         if shard is None:
             raise TinygradWeightError(
                 "Tinygrad generation was called before the model was loaded"
             )
         return shard
+
+    def _tensor_all_reduce(self) -> Callable[[Tensor], Tensor] | None:
+        loaded = self.loaded_shard
+        if loaded is None or loaded.tensor_parallel_world_size <= 1:
+            return None
+        return self._all_reduce_activation
+
+    def _all_reduce_activation(self, tensor: Tensor) -> Tensor:
+        from exo.backends.tinygrad_hidden_state import (
+            hidden_state_to_tensor,
+            tensor_to_hidden_state,
+        )
+
+        transport = self._require_pipeline_transport()
+        active = self._active_generation
+        task_id = (
+            "tinygrad-tensor-warmup" if active is None else str(active.task.task_id)
+        )
+        reduced = transport.all_reduce_sum(
+            task_id,
+            tensor_to_hidden_state(tensor.float().contiguous().realize()),
+        )
+        restored = hidden_state_to_tensor(reduced).cast(tensor.dtype)
+        return restored.contiguous().realize()
 
     def _require_pipeline_transport(self) -> PipelineTransport:
         from exo.backends.tinygrad_pipeline import TinygradPipelineError
@@ -1108,7 +1265,12 @@ class TinygradEngine(Engine):
             token_ids_to_tensor(TokenIdBuffer(shape=(1, len(token_ids)), data=packed)),
         )
         return tensor_to_hidden_state(
-            forward_loaded_shard(shard, self._require_key_value_cache(), hidden)
+            forward_loaded_shard(
+                shard,
+                self._require_key_value_cache(),
+                hidden,
+                self._tensor_all_reduce(),
+            )
         )
 
     def _logits_from_hidden_state(self, hidden_state: HiddenStateBuffer) -> list[float]:
@@ -1145,7 +1307,7 @@ class TinygradEngine(Engine):
             shard,
             token_ids_to_tensor(TokenIdBuffer(shape=(1, len(token_ids)), data=packed)),
         )
-        hidden = forward_loaded_shard(shard, cache, hidden)
+        hidden = forward_loaded_shard(shard, cache, hidden, self._tensor_all_reduce())
         logits = project_logits_tensor(shard, hidden)
         return _last_logit_row(logits)
 
@@ -1212,6 +1374,7 @@ class TinygradBuilder(Builder):
                 that is not a tinygrad pipeline shard.
         """
         from exo.backends.tinygrad_pipeline import (
+            PipelineHandshakeIdentity,
             TcpPipelineTransport,
             TinygradPipelineError,
         )
@@ -1223,7 +1386,7 @@ class TinygradBuilder(Builder):
             raise TinygradWeightError(
                 "Tinygrad connect received a placement that is not tinygrad"
             )
-        shard = _pipeline_shard(bound_instance)
+        shard = _assigned_shard(bound_instance)
         if shard.world_size == 1:
             return
         hosts = instance.hosts_by_node.get(bound_instance.bound_node_id)
@@ -1231,7 +1394,22 @@ class TinygradBuilder(Builder):
             raise TinygradPipelineError(
                 f"Tinygrad pipeline rank {shard.device_rank} has no peer addresses"
             )
-        transport = TcpPipelineTransport(device_rank=shard.device_rank, hosts=hosts)
+        protocol = (
+            "tinygrad-tensor"
+            if isinstance(shard, TensorShardMetadata)
+            else "tinygrad-pipeline"
+        )
+        transport = TcpPipelineTransport(
+            device_rank=shard.device_rank,
+            hosts=hosts,
+            identity=PipelineHandshakeIdentity(
+                instance_id=str(instance.instance_id),
+                device_rank=shard.device_rank,
+                world_size=shard.world_size,
+                model_id=str(self.model_id),
+                protocol=protocol,
+            ),
+        )
         transport.open()
         self._pipeline_transport = transport
 

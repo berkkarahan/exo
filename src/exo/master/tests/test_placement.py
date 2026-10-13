@@ -51,7 +51,11 @@ from exo.shared.types.worker.instances import (
     TinygradInstance,
 )
 from exo.shared.types.worker.runners import ShardAssignments
-from exo.shared.types.worker.shards import PipelineShardMetadata, Sharding
+from exo.shared.types.worker.shards import (
+    PipelineShardMetadata,
+    Sharding,
+    TensorShardMetadata,
+)
 
 
 @pytest.fixture
@@ -1261,7 +1265,7 @@ def test_tinygrad_placement_rejects_mlx_only_nodes() -> None:
         )
 
 
-def test_tinygrad_multi_node_tensor_command_places_a_pipeline_chain() -> None:
+def test_tinygrad_multi_node_tensor_command_places_every_layer_on_each_rank() -> None:
     topology = Topology()
     node_ids = [NodeId(), NodeId(), NodeId()]
     for node_id in node_ids:
@@ -1284,7 +1288,7 @@ def test_tinygrad_multi_node_tensor_command_places_a_pipeline_chain() -> None:
     }
     command = PlaceInstance(
         command_id=CommandId(),
-        model_card=_tinygrad_model_card(),
+        model_card=_tinygrad_model_card().model_copy(update={"hidden_size": 996}),
         sharding=Sharding.Tensor,
         instance_meta=InstanceMeta.Tinygrad,
         min_nodes=3,
@@ -1301,19 +1305,17 @@ def test_tinygrad_multi_node_tensor_command_places_a_pipeline_chain() -> None:
     instance = next(iter(placements.values()))
     assert isinstance(instance, TinygradInstance)
     assert instance.ephemeral_port != 0
-    ranked: list[tuple[PipelineShardMetadata, NodeId]] = []
+    ranked: list[tuple[TensorShardMetadata, NodeId]] = []
     for node_id, runner_id in instance.shard_assignments.node_to_runner.items():
         shard = instance.shard_assignments.runner_to_shard[runner_id]
-        assert isinstance(shard, PipelineShardMetadata)
+        assert isinstance(shard, TensorShardMetadata)
         ranked.append((shard, node_id))
     ranked.sort(key=lambda item: item[0].device_rank)
     assert [shard.device_rank for shard, _node_id in ranked] == [0, 1, 2]
-    covered = 0
     for shard, node_id in ranked:
         assert shard.world_size == 3
-        assert shard.start_layer == covered
-        assert shard.end_layer > shard.start_layer
-        covered = shard.end_layer
+        assert shard.start_layer == 0
+        assert shard.end_layer == 10
         hosts = instance.hosts_by_node[node_id]
         assert len(hosts) == 3
         assert hosts[shard.device_rank].ip == "0.0.0.0"
@@ -1327,6 +1329,5 @@ def test_tinygrad_multi_node_tensor_command_places_a_pipeline_chain() -> None:
             else:
                 assert host.ip == "198.51.100.1"
                 assert host.port == 0
-    assert covered == 10
     assert instance.hosts_by_node[ranked[2][1]][0].ip == "198.51.100.1"
     assert instance.hosts_by_node[ranked[0][1]][2].ip == "198.51.100.1"

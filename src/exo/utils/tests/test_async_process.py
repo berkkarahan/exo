@@ -2,11 +2,12 @@ import contextlib
 import os
 import signal
 import sys
+import time
 from collections.abc import AsyncIterator, Callable
 
 import pytest
 from _pytest.capture import CaptureFixture
-from anyio import EndOfStream, create_task_group, fail_after
+from anyio import EndOfStream, create_task_group, fail_after, sleep
 
 from exo.utils.async_process import (
     AsyncProcess,
@@ -59,6 +60,16 @@ def _close_stdio_and_exit() -> None:
     os.close(1)
     os.close(2)
     os._exit(0)
+
+
+def _sleep_until_stopped() -> None:
+    time.sleep(120)
+
+
+def _write_then_sleep() -> None:
+    os.write(1, b"before-stop\n")
+    os.write(2, b"before-stop-err\n")
+    time.sleep(120)
 
 
 def _send_over_mp_channel(send: MpSender[str]) -> None:
@@ -421,6 +432,76 @@ async def test_child_stdout_is_rebuilt_off_console_backed_raw_stream() -> None:
     assert "MARKER: raw stdout type is FileIO" in stdout_text
     assert "_WindowsConsoleIO" not in stdout_text
     assert b"stderr also works" in stderr
+
+
+@pytest.mark.anyio
+async def test_stop_terminates_a_running_child_and_a_restart_is_captured() -> None:
+    sleeper = AsyncProcess(_sleep_until_stopped)
+    async with create_task_group() as task_group:
+        await task_group.start(sleeper.run)
+        assert sleeper.is_alive()
+        with fail_after(10):
+            await sleeper.stop()
+
+    assert not sleeper.is_alive()
+    assert sleeper.exitcode is not None
+
+    exitcode, stdout, stderr = await _run_and_collect(
+        _write_to_stdio,
+        args=("restarted",),
+        kwargs={"stderr_suffix": "again"},
+    )
+    assert exitcode == 0
+    assert b"restarted: fd stdout\n" in stdout
+    assert b"restarted: fd stderr again\n" in stderr
+
+
+@pytest.mark.anyio
+async def test_stop_keeps_output_written_before_cancellation() -> None:
+    process = AsyncProcess(_write_then_sleep)
+    stdout = bytearray()
+    stderr = bytearray()
+
+    async with create_task_group() as task_group:
+        await task_group.start(process.run)
+        task_group.start_soon(_collect_stream, process.stdout, stdout)
+        task_group.start_soon(_collect_stream, process.stderr, stderr)
+        with fail_after(10):
+            while b"before-stop\n" not in stdout or b"before-stop-err\n" not in stderr:
+                await sleep(0.01)
+            await process.stop()
+
+    assert not process.is_alive()
+    assert b"before-stop\n" in stdout
+    assert b"before-stop-err\n" in stderr
+
+
+@pytest.mark.anyio
+async def test_repeated_stop_does_not_grow_parent_handles() -> None:
+    warmup = AsyncProcess(_sleep_until_stopped)
+    async with create_task_group() as task_group:
+        await task_group.start(warmup.run)
+        await warmup.stop()
+
+    before = _fd_count()
+    if before is None:
+        pytest.skip("fd table count is not available on this platform")
+
+    for _iteration in range(10):
+        process = AsyncProcess(_sleep_until_stopped)
+        async with create_task_group() as task_group:
+            await task_group.start(process.run)
+            assert process.is_alive()
+            with fail_after(10):
+                await process.stop()
+        assert not process.is_alive()
+
+    after = _fd_count()
+    assert after is not None
+    if sys.platform == "win32":
+        assert after <= before + 10
+    else:
+        assert after <= before + 2
 
 
 @pytest.mark.anyio

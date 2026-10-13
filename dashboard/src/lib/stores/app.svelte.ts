@@ -50,6 +50,10 @@ export interface NodeInfo {
   last_macmon_update: number;
   friendly_name?: string;
   os_version?: string;
+  driver_version?: string;
+  max_allocation_bytes?: number;
+  host_ram_total_bytes?: number;
+  estimate_source?: string;
 }
 
 export interface TopologyEdge {
@@ -89,11 +93,24 @@ interface RawNodeIdentity {
   osBuildVersion?: string;
 }
 
+interface RawAcceleratorMemorySample {
+  capacity?: { inBytes: number };
+  freeSample?: { inBytes: number };
+  maxAllocation?: { inBytes: number } | null;
+  hostRamTotal?: { inBytes: number };
+  hostRamAvailable?: { inBytes: number };
+  reserved?: { inBytes: number };
+  ceiling?: { inBytes: number };
+  estimateSource?: string;
+  driverVersion?: string;
+}
+
 interface RawMemoryUsage {
   ramTotal?: { inBytes: number };
   ramAvailable?: { inBytes: number };
   swapTotal?: { inBytes: number };
   swapAvailable?: { inBytes: number };
+  accelerator?: RawAcceleratorMemorySample | null;
 }
 
 interface RawSystemPerformanceProfile {
@@ -174,7 +191,7 @@ export interface ModelDownloadStatus {
 export interface PlacementPreview {
   model_id: string;
   sharding: "Pipeline" | "Tensor";
-  instance_meta: "MlxRing" | "MlxJaccl";
+  instance_meta: "MlxRing" | "MlxJaccl" | "Tinygrad";
   instance: unknown | null;
   memory_delta_by_node: Record<string, number> | null;
   error: string | null;
@@ -226,6 +243,7 @@ interface RawStateResponse {
     {
       MlxRingInstance?: Instance;
       MlxJacclInstance?: Instance;
+      TinygradInstance?: Instance;
     }
   >;
   runners?: Record<string, unknown>;
@@ -233,6 +251,7 @@ interface RawStateResponse {
   downloads?: Record<string, unknown[]>;
   // New granular node state fields
   nodeIdentities?: Record<string, RawNodeIdentity>;
+  nodeBackends?: Record<string, string[]>;
   nodeMemory?: Record<string, RawMemoryUsage>;
   nodeSystem?: Record<string, RawSystemPerformanceProfile>;
   nodeNetwork?: Record<string, RawNodeNetworkInfo>;
@@ -465,6 +484,10 @@ function transformTopology(
       last_macmon_update: Date.now() / 1000,
       friendly_name: identity?.friendlyName,
       os_version: identity?.osVersion,
+      driver_version: memory?.accelerator?.driverVersion || undefined,
+      max_allocation_bytes: memory?.accelerator?.maxAllocation?.inBytes,
+      host_ram_total_bytes: memory?.accelerator?.hostRamTotal?.inBytes,
+      estimate_source: memory?.accelerator?.estimateSource,
     };
   }
 
@@ -563,6 +586,7 @@ class AppStore {
   previewNodeFilter = $state<Set<string>>(new Set());
   lastUpdate = $state<number | null>(null);
   nodeIdentities = $state<Record<string, RawNodeIdentity>>({});
+  nodeBackends = $state<Record<string, string[]>>({});
   thunderboltBridgeCycles = $state<string[][]>([]);
   nodeThunderbolt = $state<
     Record<
@@ -934,6 +958,7 @@ class AppStore {
     let instanceType: string | null = null;
     if (instanceTag === "MlxRingInstance") instanceType = "MLX Ring";
     else if (instanceTag === "MlxJacclInstance") instanceType = "MLX RDMA";
+    else if (instanceTag === "TinygradInstance") instanceType = "Tinygrad";
 
     let sharding: string | null = null;
     const inst = instance as {
@@ -1343,6 +1368,7 @@ class AppStore {
       }
       // Node identities (for OS version mismatch detection)
       this.nodeIdentities = data.nodeIdentities ?? {};
+      this.nodeBackends = data.nodeBackends ?? {};
       // Thunderbolt identifiers per node
       this.nodeThunderbolt = data.nodeThunderbolt ?? {};
       // RDMA ctl status per node
@@ -3608,6 +3634,7 @@ export const isConnected = () => appStore.isConnected;
 
 // Node identities (for OS version mismatch detection)
 export const nodeIdentities = () => appStore.nodeIdentities;
+export const nodeBackends = () => appStore.nodeBackends;
 
 // Thunderbolt & RDMA status
 export const nodeThunderbolt = () => appStore.nodeThunderbolt;

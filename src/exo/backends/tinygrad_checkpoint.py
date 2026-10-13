@@ -337,7 +337,23 @@ def read_gguf_checkpoint(directory: Path) -> GgufCheckpoint:
             ``general.architecture``.
     """
     paths = _gguf_paths(directory)
-    headers = tuple(_read_gguf_file(path) for path in paths)
+    return _checkpoint_from_headers(tuple(_read_gguf_file(path) for path in paths))
+
+
+def read_one_gguf_checkpoint(path: Path) -> GgufCheckpoint:
+    """Read one GGUF header. Other files in the directory are ignored.
+
+    Raises:
+        TinygradWeightError: ``model_card_from_gguf_file`` handles this by
+            raising ``GgufRegistrationError`` for the model-add API. The
+            runner entrypoint does not call this function.
+    """
+    if not path.is_file():
+        raise TinygradWeightError(f"{path} is not a GGUF file")
+    return _checkpoint_from_headers((_read_gguf_file(path),))
+
+
+def _checkpoint_from_headers(headers: tuple[_GgufFile, ...]) -> GgufCheckpoint:
     primary = headers[0]
     architecture_name = primary.architecture_name
     if architecture_name is None:
@@ -609,16 +625,18 @@ def ggml_tensor_from_file(
     """Dequantize one GGUF byte range.
 
     The disk tensor is sliced to ``length`` bytes before conversion, so the
-    rest of the file is not realized.
+    rest of the file is not realized. The slice is copied to
+    ``Device.DEFAULT`` before dequantization. Disk has no renderer, so a
+    quantized decode kernel cannot be compiled there.
 
     Raises:
         TinygradWeightError: The runner entrypoint handles a GGML type that
             ``ggml_data_to_tensor`` rejects.
     """
-    from tinygrad import Tensor
+    from tinygrad import Device, Tensor
     from tinygrad.llm.gguf import ggml_data_to_tensor
 
-    window = Tensor(path)[start : start + length]
+    window = Tensor(path)[start : start + length].contiguous().to(Device.DEFAULT)
     try:
         return ggml_data_to_tensor(window, element_count, ggml_type)
     except ValueError as error:

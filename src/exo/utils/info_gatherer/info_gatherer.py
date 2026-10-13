@@ -14,6 +14,7 @@ from anyio.streams.buffered import BufferedByteReceiveStream
 from loguru import logger
 from pydantic import ValidationError
 
+from exo.shared.cluster_runtime import selected_inference_runtime
 from exo.shared.constants import EXO_CONFIG_FILE, EXO_DEFAULT_MODELS_DIR
 from exo.shared.types.backends import Backend
 from exo.shared.types.memory import Memory
@@ -462,11 +463,35 @@ def collect_windows_join_backends() -> list[Backend]:
     if not any(name.strip() for name in declared_names):
         adapter_names = _windows_adapter_names()
         has_nvidia_gpu = _has_nvml_cuda()
-    return windows_join_backends(
-        declared_device_names=declared_names,
-        adapter_names=adapter_names,
-        has_nvidia_gpu=has_nvidia_gpu,
+    return _without_unusable_windows_amd(
+        windows_join_backends(
+            declared_device_names=declared_names,
+            adapter_names=adapter_names,
+            has_nvidia_gpu=has_nvidia_gpu,
+        )
     )
+
+
+def _without_unusable_windows_amd(backends: list[Backend]) -> list[Backend]:
+    """Drop ``WinAMD`` unless an OpenCL adapter passes the numeric probe.
+
+    ``windows_opencl_is_usable`` handles driver and compile failures and
+    returns False. Any other join identity is kept. When AMD was the only
+    identity, the node still advertises ``WinCPU``.
+    """
+    if Backend.WinAMD not in backends:
+        return backends
+    from exo.backends.tinygrad_opencl import windows_opencl_is_usable
+
+    if windows_opencl_is_usable():
+        return backends
+    logger.warning(
+        "OpenCL probe did not accept an AMD adapter. WinAMD will not be advertised."
+    )
+    remaining = [backend for backend in backends if backend != Backend.WinAMD]
+    if not remaining:
+        return [Backend.WinCPU]
+    return remaining
 
 
 class NodeBackends(TaggedModel):
@@ -479,9 +504,12 @@ class NodeBackends(TaggedModel):
         On Windows the result includes ``WinAMD``, ``WinCUDA``, and ``WinCPU``
         join identities plus ONNX execution providers when detected.
         ``EXO_TINYGRAD_DEVICES`` may list ``AMD``, ``CUDA``, or ``CPU``. On
-        every other platform the node starts from ``MlxCpu``, adds ``MlxMetal``
-        on Darwin and ``MlxCuda`` when NVML sees a GPU, then appends tinygrad
-        identities from ``EXO_TINYGRAD_DEVICES``.
+        Darwin, ``EXO_INFERENCE_RUNTIME=tinygrad`` advertises only tinygrad,
+        defaulting to ``METAL``, so the Mac can join a Windows cluster.
+        ``EXO_INFERENCE_RUNTIME=mlx`` advertises only MLX. With neither value,
+        the node starts from ``MlxCpu``, adds ``MlxMetal`` on Darwin and
+        ``MlxCuda`` when NVML sees a GPU, then appends tinygrad identities
+        from ``EXO_TINYGRAD_DEVICES``.
 
         Raises:
             TinygradDeviceSelectionError: A declared device name is unknown.
@@ -496,17 +524,31 @@ class NodeBackends(TaggedModel):
             if await to_thread.run_sync(_has_nvml_cuda):
                 windows_backends.append(Backend.OnnxCuda)
             return cls(backends=windows_backends)
+        runtime_name = selected_inference_runtime(
+            os.environ.get("EXO_INFERENCE_RUNTIME", "")
+        )
+        if runtime_name == "tinygrad":
+            from exo.backends.tinygrad_engine import backends_from_declared_devices
+
+            declared_devices = os.environ.get("EXO_TINYGRAD_DEVICES", "")
+            device_names = (
+                declared_devices.split(",") if declared_devices.strip() else ["METAL"]
+            )
+            return cls(backends=backends_from_declared_devices(device_names))
         backends: list[Backend] = [Backend.MlxCpu]
         if IS_DARWIN:
             backends.append(Backend.MlxMetal)
         if await to_thread.run_sync(_has_nvml_cuda):
             backends.append(Backend.MlxCuda)
             backends.append(Backend.Vllm)
-        declared_devices = os.environ.get("EXO_TINYGRAD_DEVICES", "")
-        if declared_devices:
-            from exo.backends.tinygrad_engine import backends_from_declared_devices
+        if runtime_name != "mlx":
+            declared_devices = os.environ.get("EXO_TINYGRAD_DEVICES", "")
+            if declared_devices:
+                from exo.backends.tinygrad_engine import backends_from_declared_devices
 
-            backends.extend(backends_from_declared_devices(declared_devices.split(",")))
+                backends.extend(
+                    backends_from_declared_devices(declared_devices.split(","))
+                )
         return cls(backends=backends)
 
 
@@ -578,6 +620,10 @@ class InfoGatherer:
         async with self._tg as tg:
             uses_tinygrad_device = (
                 os.environ.get("EXO_TINYGRAD_DEVICES", "").strip() != ""
+                or selected_inference_runtime(
+                    os.environ.get("EXO_INFERENCE_RUNTIME", "")
+                )
+                == "tinygrad"
             )
             if IS_DARWIN:
                 if not uses_tinygrad_device:

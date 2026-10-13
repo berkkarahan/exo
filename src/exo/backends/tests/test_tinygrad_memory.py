@@ -11,6 +11,7 @@ from exo.backends.tinygrad_memory import (
     parse_nvidia_smi_memory,
     parse_rocm_smi_vram,
 )
+from exo.backends.tinygrad_opencl import OpenClMemoryReading
 from exo.shared.types.profiling import MemoryUsage
 from exo.utils.channels import channel
 from exo.utils.info_gatherer.info_gatherer import (
@@ -162,6 +163,10 @@ def test_successful_probe_honors_memory_override(
     usage = memory_usage_for_device("AMD")
     assert usage.ram_total.in_bytes == _ROCM_TOTAL_BYTES
     assert usage.ram_available.in_bytes == 14000 * _MEBIBYTE
+    assert usage.accelerator is not None
+    assert usage.accelerator.capacity.in_bytes == _ROCM_TOTAL_BYTES
+    assert usage.accelerator.estimate_source == "override"
+    assert usage.accelerator.host_ram_total.in_bytes == _SYSTEM_RAM_TOTAL
 
 
 def test_gatherer_publishes_vram_when_amd_is_declared(
@@ -219,6 +224,50 @@ async def test_memory_monitor_sends_probed_usage(
     assert isinstance(received, MemoryUsage)
     assert received.ram_available.in_bytes == _ROCM_TOTAL_BYTES - _ROCM_USED_BYTES
     assert received.ram_total.in_bytes != _SYSTEM_RAM_TOTAL
+
+
+def test_cl_memory_uses_the_opencl_reading(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_host_memory(monkeypatch)
+    monkeypatch.setattr(
+        "exo.backends.tinygrad_opencl.opencl_memory_reading",
+        lambda: OpenClMemoryReading(
+            capacity_bytes=_ROCM_TOTAL_BYTES,
+            free_sample_bytes=_ROCM_TOTAL_BYTES - _ROCM_USED_BYTES,
+            max_allocation_bytes=_ROCM_TOTAL_BYTES // 2,
+            driver_version="3679.0",
+            estimate_source="opencl-amd-free",
+        ),
+    )
+    usage = memory_usage_for_device("CL")
+    assert usage.ram_total.in_bytes == _ROCM_TOTAL_BYTES
+    assert usage.ram_available.in_bytes == _ROCM_TOTAL_BYTES - _ROCM_USED_BYTES
+    assert usage.accelerator is not None
+    assert usage.accelerator.max_allocation is not None
+    assert usage.accelerator.max_allocation.in_bytes == _ROCM_TOTAL_BYTES // 2
+    assert usage.accelerator.driver_version == "3679.0"
+    assert usage.accelerator.estimate_source == "opencl-amd-free"
+    assert usage.accelerator.host_ram_total.in_bytes == _SYSTEM_RAM_TOTAL
+    assert usage.accelerator.host_ram_available.in_bytes == _SYSTEM_RAM_AVAILABLE
+    assert usage.accelerator.free_sample.in_bytes != _SYSTEM_RAM_AVAILABLE
+    assert usage.accelerator.ceiling.in_bytes == _ROCM_TOTAL_BYTES
+
+
+def test_missing_opencl_adapter_advertises_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_host_memory(monkeypatch)
+    monkeypatch.setenv("OVERRIDE_MEMORY_MB", "14000")
+    monkeypatch.setattr(
+        "exo.backends.tinygrad_opencl.opencl_memory_reading",
+        lambda: None,
+    )
+    usage = memory_usage_for_device("CL")
+    assert usage.ram_total.in_bytes == 0
+    assert usage.ram_available.in_bytes == 0
+    assert usage.accelerator is not None
+    assert usage.accelerator.estimate_source == "unavailable"
+    assert usage.accelerator.host_ram_total.in_bytes == _SYSTEM_RAM_TOTAL
+    assert usage.accelerator.capacity.in_bytes == 0
 
 
 def test_engine_memory_usage_delegates_to_the_device_probe(

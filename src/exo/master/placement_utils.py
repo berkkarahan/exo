@@ -2,6 +2,7 @@ from collections.abc import Generator, Mapping
 
 from loguru import logger
 
+from exo.master.placement_memory import shard_placement_bytes
 from exo.shared.models.model_cards import ModelCard
 from exo.shared.topology import Topology
 from exo.shared.types.common import Host, NodeId
@@ -106,11 +107,11 @@ def _allocate_and_validate_layers(
         ],
     )
 
-    total_storage = model_card.storage_size
-    total_layers = model_card.n_layers
     for i, node_id in enumerate(node_ids):
         node_layers = layer_allocations[i]
-        required_memory = (total_storage * node_layers) // total_layers
+        required_memory = Memory.from_bytes(
+            shard_placement_bytes(model_card, node_layers)
+        )
         available_memory = node_memory[node_id].ram_available
         if required_memory > available_memory:
             raise ValueError(

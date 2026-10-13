@@ -13,6 +13,7 @@ private let defaultModelsDirKey = "EXODefaultModelsDir"
 private let additionalModelsDirsKey = "EXOAdditionalModelsDirs"
 private let readOnlyModelsDirsKey = "EXOReadOnlyModelsDirs"
 private let customEnvironmentVariablesKey = "EXOCustomEnvironmentVariables"
+private let inferenceRuntimeKey = "EXOInferenceRuntime"
 
 /// A user-defined environment variable that is injected into the exo child
 /// process at launch. Used as an escape hatch for env vars that don't have
@@ -131,6 +132,21 @@ final class ExoProcessController: ObservableObject {
     {
         didSet {
             UserDefaults.standard.set(readOnlyModelsDirs, forKey: readOnlyModelsDirsKey)
+        }
+    }
+    /// ``mlx`` or ``tinygrad``. Tinygrad is required to join a Windows cluster.
+    @Published var inferenceRuntime: String = {
+        let stored = UserDefaults.standard.string(forKey: inferenceRuntimeKey) ?? "mlx"
+        return stored == "tinygrad" ? "tinygrad" : "mlx"
+    }()
+    {
+        didSet {
+            let stored = inferenceRuntime == "tinygrad" ? "tinygrad" : "mlx"
+            if stored != inferenceRuntime {
+                inferenceRuntime = stored
+                return
+            }
+            UserDefaults.standard.set(stored, forKey: inferenceRuntimeKey)
         }
     }
     @Published var customEnvironmentVariables: [CustomEnvironmentVariable] = {
@@ -366,6 +382,13 @@ final class ExoProcessController: ObservableObject {
             environment["EXO_OFFLINE"] = "true"
         }
         environment["EXO_FAST_SYNCH"] = fastSynchEnabled ? "true" : "false"
+        let runtime = inferenceRuntime == "tinygrad" ? "tinygrad" : "mlx"
+        environment["EXO_INFERENCE_RUNTIME"] = runtime
+        if runtime == "tinygrad" {
+            environment["EXO_TINYGRAD_DEVICES"] = "METAL"
+        } else {
+            environment.removeValue(forKey: "EXO_TINYGRAD_DEVICES")
+        }
 
         var paths: [String] = []
         if let existing = environment["PATH"], !existing.isEmpty {

@@ -837,6 +837,19 @@ async def get_weight_map(model_id: ModelId, revision: str = "main") -> dict[str,
 
 
 async def resolve_allow_patterns(shard: ShardMetadata) -> list[str]:
+    # A named GGUF file is the whole weight payload. Sidecars stay so the
+    # tokenizer and chat template travel with it. Every other repository
+    # still downloads the full tree.
+    gguf_filename = shard.model_card.gguf_filename
+    if gguf_filename is not None:
+        return [
+            gguf_filename,
+            "*.json",
+            "*.jinja",
+            "*.txt",
+            "tokenizer.model",
+            "*.tiktoken",
+        ]
     # TODO: 'Smart' downloads are disabled because:
     #  (i) We don't handle all kinds of files;
     # (ii) We don't have sticky sessions.

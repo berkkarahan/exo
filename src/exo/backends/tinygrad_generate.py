@@ -6,6 +6,7 @@ choose an id and decide when the completion is finished.
 
 from __future__ import annotations
 
+import hashlib
 import math
 import random
 from collections.abc import Sequence
@@ -55,6 +56,16 @@ def visible_completion_piece(
             return visible[len(previous_text) :], stop
         return visible, stop
     return piece, None
+
+
+def agreed_tensor_seed(task_id: str) -> int:
+    """Return the seed every tensor-parallel rank uses when the request has none.
+
+    The value is the first four bytes of SHA-256 over ``task_id``. Each rank
+    holds the same task, so they draw the same token without another collective.
+    """
+    digest = hashlib.sha256(task_id.encode()).digest()
+    return int.from_bytes(digest[:4], "little")
 
 
 def sample_token_id(

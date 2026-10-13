@@ -7,6 +7,7 @@ sampled token travels back. ``world_size == 1`` never constructs a transport.
 
 from __future__ import annotations
 
+import array
 import socket
 import time
 from collections.abc import Callable, Sequence
@@ -14,7 +15,14 @@ from dataclasses import dataclass
 from queue import Empty, Queue
 from typing import Literal, Protocol, final
 
+from pydantic import Field, ValidationError
+
 from exo.backends.tinygrad_hidden_state import HiddenStateBuffer, HiddenStateDTypeName
+from exo.backends.tinygrad_progress import (
+    DEFAULT_TINYGRAD_PROGRESS_BUDGETS,
+    TinygradProgressDeadlineError,
+    progress_is_overdue,
+)
 from exo.shared.types.common import Host
 from exo.utils.pydantic_ext import FrozenModel
 
@@ -22,6 +30,7 @@ _KIND_HANDSHAKE = 1
 _KIND_HIDDEN = 2
 _KIND_TOKEN = 3
 _KIND_CANCEL = 4
+_KIND_REDUCE = 5
 _MAX_FRAME_BYTES = 512 * 1024 * 1024
 _HANDSHAKE_TIMEOUT_SECONDS = 30.0
 _RECEIVE_POLL_SECONDS = 0.05
@@ -60,6 +69,79 @@ class TinygradPipelineError(Exception):
 
 
 @final
+class PipelineHandshakeIdentity(FrozenModel):
+    """Identity exchanged before a tinygrad pipeline moves hidden states."""
+
+    instance_id: str = Field(min_length=1)
+    device_rank: int = Field(ge=0)
+    world_size: int = Field(ge=2)
+    model_id: str = Field(min_length=1)
+    protocol: Literal["tinygrad-pipeline", "tinygrad-tensor"] = "tinygrad-pipeline"
+    protocol_version: Literal[1] = 1
+
+
+def encode_handshake_frame(identity: PipelineHandshakeIdentity) -> bytes:
+    """Return the length-prefixed handshake frame for ``identity``."""
+    payload = identity.model_dump_json().encode("utf-8")
+    return encode_frame(_KIND_HANDSHAKE, "", payload)
+
+
+def decode_handshake_identity(payload: bytes) -> PipelineHandshakeIdentity:
+    """Parse a handshake payload.
+
+    Raises:
+        TinygradPipelineError: The runner entrypoint handles an unreadable
+            payload by publishing ``RunnerTerminationError``.
+    """
+    try:
+        text = payload.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise TinygradPipelineError("Pipeline handshake identity is invalid") from error
+    try:
+        return PipelineHandshakeIdentity.model_validate_json(text)
+    except ValidationError as error:
+        raise TinygradPipelineError("Pipeline handshake identity is invalid") from error
+
+
+def incompatible_handshake_reason(
+    local: PipelineHandshakeIdentity,
+    peer: PipelineHandshakeIdentity,
+    expected_peer_rank: int,
+) -> str | None:
+    """Return why ``peer`` cannot join ``local``, or None when it can."""
+    if (
+        peer.protocol != local.protocol
+        or peer.protocol_version != local.protocol_version
+    ):
+        return "Pipeline handshake protocol does not match"
+    if peer.instance_id != local.instance_id:
+        return "Pipeline handshake instance does not match"
+    if peer.model_id != local.model_id:
+        return "Pipeline handshake model does not match"
+    if peer.world_size != local.world_size:
+        return "Pipeline handshake world size does not match"
+    if peer.device_rank != expected_peer_rank:
+        return "Pipeline handshake rank does not match"
+    return None
+
+
+def raise_if_transport_overdue(
+    *,
+    started_at: float,
+    now: float,
+    budget_seconds: float,
+) -> None:
+    """Raise when a pipeline receive has waited longer than its budget.
+
+    Raises:
+        TinygradProgressDeadlineError: The runner entrypoint handles this by
+            publishing ``RunnerTerminationError``.
+    """
+    if progress_is_overdue(started_at, now, budget_seconds):
+        raise TinygradProgressDeadlineError("transport", budget_seconds)
+
+
+@final
 class PipelineTokenResult(FrozenModel):
     """Sampled token carried from the last rank back to rank 0."""
 
@@ -89,6 +171,8 @@ class PipelineTransport(Protocol):
     """Sockets or queues that move one pipeline step between two ranks."""
 
     cancellation_probe: Callable[[], bool]
+    progress_clock: Callable[[], float]
+    transport_budget_seconds: float
 
     def open(self) -> None:
         """Connect to the neighbouring ranks and exchange a handshake."""
@@ -120,6 +204,16 @@ class PipelineTransport(Protocol):
 
     def signal_cancellation(self, task_id: str) -> None:
         """Tell both neighbours to leave a blocked receive."""
+        ...
+
+    def all_reduce_sum(
+        self, task_id: str, hidden_state: HiddenStateBuffer
+    ) -> HiddenStateBuffer:
+        """Sum ``hidden_state`` along the rank chain.
+
+        Every rank must call this once per partial, in the same order. The
+        return value is the sum on every rank.
+        """
         ...
 
 
@@ -370,6 +464,73 @@ class PipelineMemoryLink:
     backward: Queue[bytes]
 
 
+def sum_hidden_states(
+    left: HiddenStateBuffer, right: HiddenStateBuffer
+) -> HiddenStateBuffer:
+    """Add two float32 hidden states elementwise.
+
+    Raises:
+        TinygradPipelineError: The runner entrypoint handles a collective
+            whose peers produced different shapes or a non-float32 payload.
+    """
+    if left.dtype != "float32" or right.dtype != "float32":
+        raise TinygradPipelineError("Tensor parallel all-reduce expects float32")
+    if left.shape != right.shape or len(left.data) != len(right.data):
+        raise TinygradPipelineError("Tensor parallel ranks reduced different shapes")
+    first: array.array[float] = array.array("f")
+    second: array.array[float] = array.array("f")
+    first.frombytes(left.data)
+    second.frombytes(right.data)
+    if len(first) != len(second):
+        raise TinygradPipelineError("Tensor parallel ranks reduced different shapes")
+    total: array.array[float] = array.array(
+        "f", (item + peer for item, peer in zip(first, second, strict=True))
+    )
+    return HiddenStateBuffer(dtype="float32", shape=left.shape, data=total.tobytes())
+
+
+def _all_reduce_sum(
+    *,
+    device_rank: int,
+    world_size: int,
+    hidden_state: HiddenStateBuffer,
+    send_to_next: Callable[[HiddenStateBuffer], None],
+    receive_from_previous: Callable[[], HiddenStateBuffer | None],
+    send_to_previous: Callable[[HiddenStateBuffer], None],
+    receive_from_next: Callable[[], HiddenStateBuffer | None],
+) -> HiddenStateBuffer:
+    """Sum one tensor along a chain and return that sum on every rank.
+
+    Rank 0 starts the partial. Each later rank adds its own partial and
+    forwards the running total. The last rank sends the sum back down the
+    same links.
+
+    Raises:
+        TinygradPipelineError: The runner entrypoint handles a cancelled
+            receive or a chain that was opened for a single rank.
+    """
+    if world_size < 2:
+        raise TinygradPipelineError(
+            "Tensor parallel all-reduce needs at least two ranks"
+        )
+    partial = hidden_state
+    if device_rank > 0:
+        received = receive_from_previous()
+        if received is None:
+            raise TinygradPipelineError("Tensor parallel collective was cancelled")
+        partial = sum_hidden_states(partial, received)
+    if device_rank + 1 < world_size:
+        send_to_next(partial)
+        total = receive_from_next()
+        if total is None:
+            raise TinygradPipelineError("Tensor parallel collective was cancelled")
+    else:
+        total = partial
+    if device_rank > 0:
+        send_to_previous(total)
+    return total
+
+
 def connect_memory_pipeline(world_size: int) -> list[InMemoryPipelineTransport]:
     """Pair in-memory hops for a test that runs every rank in one process.
 
@@ -399,6 +560,10 @@ class InMemoryPipelineTransport:
         self.device_rank = device_rank
         self._links = links
         self.cancellation_probe: Callable[[], bool] = _never_cancelled
+        self.progress_clock: Callable[[], float] = time.monotonic
+        self.transport_budget_seconds = (
+            DEFAULT_TINYGRAD_PROGRESS_BUDGETS.transport_seconds
+        )
         self._signalled_task_ids: set[str] = set()
         self._closed = False
 
@@ -455,6 +620,55 @@ class InMemoryPipelineTransport:
         if self.device_rank > 0:
             self._links[self.device_rank - 1].backward.put(frame)
 
+    def all_reduce_sum(
+        self, task_id: str, hidden_state: HiddenStateBuffer
+    ) -> HiddenStateBuffer:
+        return _all_reduce_sum(
+            device_rank=self.device_rank,
+            world_size=len(self._links) + 1,
+            hidden_state=hidden_state,
+            send_to_next=lambda payload: self._send_reduce(
+                to_next=True, task_id=task_id, payload=payload
+            ),
+            receive_from_previous=lambda: self._receive_reduce(
+                from_previous=True, task_id=task_id
+            ),
+            send_to_previous=lambda payload: self._send_reduce(
+                to_next=False, task_id=task_id, payload=payload
+            ),
+            receive_from_next=lambda: self._receive_reduce(
+                from_previous=False, task_id=task_id
+            ),
+        )
+
+    def _send_reduce(
+        self, *, to_next: bool, task_id: str, payload: HiddenStateBuffer
+    ) -> None:
+        link = self._link_to_next() if to_next else self._link_from_previous()
+        channel = link.forward if to_next else link.backward
+        channel.put(encode_frame(_KIND_REDUCE, task_id, encode_hidden_state(payload)))
+
+    def _receive_reduce(
+        self, *, from_previous: bool, task_id: str
+    ) -> HiddenStateBuffer | None:
+        if from_previous:
+            payload = self._receive(
+                primary=self._link_from_previous().forward,
+                secondary=self._optional_backward_from_next(),
+                expected_kind=_KIND_REDUCE,
+                task_id=task_id,
+            )
+        else:
+            payload = self._receive(
+                primary=self._link_to_next().backward,
+                secondary=self._optional_forward_from_previous(),
+                expected_kind=_KIND_REDUCE,
+                task_id=task_id,
+            )
+        if payload is None:
+            return None
+        return decode_hidden_state(payload)
+
     def _link_to_next(self) -> PipelineMemoryLink:
         if self.device_rank >= len(self._links):
             raise TinygradPipelineError(
@@ -487,10 +701,16 @@ class InMemoryPipelineTransport:
         expected_kind: int,
         task_id: str,
     ) -> bytes | None:
+        started_at = self.progress_clock()
         while True:
             if self.cancellation_probe():
                 self.signal_cancellation(task_id)
                 return None
+            raise_if_transport_overdue(
+                started_at=started_at,
+                now=self.progress_clock(),
+                budget_seconds=self.transport_budget_seconds,
+            )
             interpreted = self._poll_queue(secondary, expected_kind, task_id, False)
             if interpreted is not None:
                 if interpreted.action == "cancelled":
@@ -547,14 +767,32 @@ class InMemoryPipelineTransport:
 class TcpPipelineTransport:
     """Length-prefixed TCP hop. ``open`` handshakes before weights load."""
 
-    def __init__(self, device_rank: int, hosts: Sequence[Host]) -> None:
+    def __init__(
+        self,
+        device_rank: int,
+        hosts: Sequence[Host],
+        identity: PipelineHandshakeIdentity,
+    ) -> None:
         if device_rank < 0 or device_rank >= len(hosts):
             raise TinygradPipelineError(
                 f"Tinygrad pipeline rank {device_rank} is outside its host list"
             )
+        if identity.device_rank != device_rank:
+            raise TinygradPipelineError(
+                "Pipeline handshake rank does not match this transport"
+            )
+        if identity.world_size != len(hosts):
+            raise TinygradPipelineError(
+                "Pipeline handshake world size does not match the host list"
+            )
         self.device_rank = device_rank
         self._hosts = hosts
+        self._identity = identity
         self.cancellation_probe: Callable[[], bool] = _never_cancelled
+        self.progress_clock: Callable[[], float] = time.monotonic
+        self.transport_budget_seconds = (
+            DEFAULT_TINYGRAD_PROGRESS_BUDGETS.transport_seconds
+        )
         self._signalled_task_ids: set[str] = set()
         self._listener: socket.socket | None = None
         self._to_next: socket.socket | None = None
@@ -593,11 +831,13 @@ class TcpPipelineTransport:
                     self._hosts[self.device_rank + 1], deadline
                 )
                 self._readers[self._to_next] = _SocketReader(self._to_next)
-                self._exchange_handshake(self._to_next, deadline)
+                self._exchange_handshake(self._to_next, deadline, self.device_rank + 1)
             if self.device_rank > 0:
                 self._from_previous = self._accept_until(listener, deadline)
                 self._readers[self._from_previous] = _SocketReader(self._from_previous)
-                self._exchange_handshake(self._from_previous, deadline)
+                self._exchange_handshake(
+                    self._from_previous, deadline, self.device_rank - 1
+                )
         except TinygradPipelineError:
             self.close()
             raise
@@ -663,6 +903,43 @@ class TcpPipelineTransport:
                 # its own receive, so a failed cancel send is not fatal.
                 continue
 
+    def all_reduce_sum(
+        self, task_id: str, hidden_state: HiddenStateBuffer
+    ) -> HiddenStateBuffer:
+        return _all_reduce_sum(
+            device_rank=self.device_rank,
+            world_size=len(self._hosts),
+            hidden_state=hidden_state,
+            send_to_next=lambda payload: self._send_reduce(
+                self._require_next(), task_id, payload
+            ),
+            receive_from_previous=lambda: self._receive_reduce(
+                self._require_previous(), task_id
+            ),
+            send_to_previous=lambda payload: self._send_reduce(
+                self._require_previous(), task_id, payload
+            ),
+            receive_from_next=lambda: self._receive_reduce(
+                self._require_next(), task_id
+            ),
+        )
+
+    def _send_reduce(
+        self, connection: socket.socket, task_id: str, payload: HiddenStateBuffer
+    ) -> None:
+        _send_all(
+            connection,
+            encode_frame(_KIND_REDUCE, task_id, encode_hidden_state(payload)),
+        )
+
+    def _receive_reduce(
+        self, connection: socket.socket, task_id: str
+    ) -> HiddenStateBuffer | None:
+        payload = self._receive(connection, _KIND_REDUCE, task_id)
+        if payload is None:
+            return None
+        return decode_hidden_state(payload)
+
     def _require_next(self) -> socket.socket:
         connection = self._to_next
         if connection is None or not self._is_open:
@@ -688,10 +965,16 @@ class TcpPipelineTransport:
         self, primary: socket.socket, expected_kind: int, task_id: str
     ) -> bytes | None:
         secondary = self._secondary(primary)
+        started_at = self.progress_clock()
         while True:
             if self.cancellation_probe():
                 self.signal_cancellation(task_id)
                 return None
+            raise_if_transport_overdue(
+                started_at=started_at,
+                now=self.progress_clock(),
+                budget_seconds=self.transport_budget_seconds,
+            )
             for connection, allow_payload in (
                 (secondary, False),
                 (primary, True),
@@ -764,8 +1047,13 @@ class TcpPipelineTransport:
             _configure_connection(connection)
             return connection
 
-    def _exchange_handshake(self, connection: socket.socket, deadline: float) -> None:
-        _send_all(connection, encode_frame(_KIND_HANDSHAKE, "", b""))
+    def _exchange_handshake(
+        self,
+        connection: socket.socket,
+        deadline: float,
+        expected_peer_rank: int,
+    ) -> None:
+        _send_all(connection, encode_handshake_frame(self._identity))
         reader = self._readers[connection]
         while True:
             remaining = deadline - time.monotonic()
@@ -780,4 +1068,10 @@ class TcpPipelineTransport:
                 raise TinygradPipelineError(
                     "Pipeline handshake received an unexpected frame"
                 )
+            peer = decode_handshake_identity(frame.payload)
+            reason = incompatible_handshake_reason(
+                self._identity, peer, expected_peer_rank
+            )
+            if reason is not None:
+                raise TinygradPipelineError(reason)
             return

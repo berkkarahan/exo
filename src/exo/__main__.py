@@ -8,6 +8,7 @@ from typing import Final
 from exo.main import main
 
 INLINE_CODE_FLAG: Final[str] = "-c"
+RUNTIME_ARGUMENT: Final[str] = "--exo-runtime"
 
 
 def _maybe_run_inline_code(argv: Sequence[str]) -> bool:
@@ -32,8 +33,25 @@ def _maybe_run_inline_code(argv: Sequence[str]) -> bool:
     return True
 
 
+def _without_runtime_argument(argv: Sequence[str]) -> list[str]:
+    """Drop the Windows shell marker before argparse sees the server command."""
+    return [argument for argument in argv if argument != RUNTIME_ARGUMENT]
+
+
 if __name__ == "__main__":
     if _maybe_run_inline_code(sys.argv):
         sys.exit(0)
     freeze_support()
-    main()
+    frozen_windows_shell = (
+        sys.platform == "win32"
+        and bool(getattr(sys, "frozen", False))
+        and RUNTIME_ARGUMENT not in sys.argv
+    )
+    if frozen_windows_shell:
+        from exo.windows.launcher import main as windows_shell
+
+        windows_shell()
+    else:
+        if RUNTIME_ARGUMENT in sys.argv:
+            sys.argv = _without_runtime_argument(sys.argv)
+        main()

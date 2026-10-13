@@ -620,7 +620,20 @@
       nodeG
         .append("title")
         .text(
-          `${friendlyName}\nID: ${nodeInfo.id.slice(-8)}\nMemory: ${formatBytes(ramUsed)}/${formatBytes(ramTotal)}`,
+          [
+            `${friendlyName}`,
+            `ID: ${nodeInfo.id.slice(-8)}`,
+            `Memory: ${formatBytes(ramUsed)}/${formatBytes(ramTotal)}`,
+            node.driver_version ? `Driver: ${node.driver_version}` : "",
+            node.max_allocation_bytes
+              ? `Max allocation: ${formatBytes(node.max_allocation_bytes)}`
+              : "",
+            node.host_ram_total_bytes
+              ? `Host RAM: ${formatBytes(node.host_ram_total_bytes)}`
+              : "",
+          ]
+            .filter((line) => line !== "")
+            .join("\n"),
         );
 
       if (modelLower === "mac studio") {
