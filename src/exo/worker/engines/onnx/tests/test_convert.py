@@ -60,7 +60,10 @@ class _RecordingBuilder:
 
 
 def _write_synthetic_checkpoint(
-    source_dir: Path, *, n_layers: int = N_LAYERS, architectures: list[str] | None = None
+    source_dir: Path,
+    *,
+    n_layers: int = N_LAYERS,
+    architectures: list[str] | None = None,
 ) -> None:
     source_dir.mkdir(parents=True, exist_ok=True)
     config = {
@@ -313,7 +316,9 @@ class TestConvertForRank:
         assert first_path == second_path
         assert len(builder.calls) == 1
 
-    def test_bf16_tensor_survives_conversion_byte_for_byte(self, tmp_path: Path) -> None:
+    def test_bf16_tensor_survives_conversion_byte_for_byte(
+        self, tmp_path: Path
+    ) -> None:
         """Regression test: numpy cannot represent BF16, so staging must copy
         raw bytes instead of materializing tensors through numpy. Fails
         against the old ``safe_open(..., framework="numpy")`` implementation
@@ -332,7 +337,9 @@ class TestConvertForRank:
             convert_for_rank(MODEL_ID, shard, build_model=builder)
 
         assert builder.staged_header is not None
-        entry = cast("dict[str, Any]", builder.staged_header["model.embed_tokens.weight"])
+        entry = cast(
+            "dict[str, Any]", builder.staged_header["model.embed_tokens.weight"]
+        )
         assert entry["dtype"] == "BF16"
         assert entry["shape"] == [2, 2]
         assert builder.staged_tensor_bytes == bytes(range(8))
@@ -359,16 +366,12 @@ class TestConvertForRank:
         assert len(builder.calls) == 1
         assert second_path is not None
 
-    def test_unsupported_architecture_raises_before_build(
-        self, tmp_path: Path
-    ) -> None:
+    def test_unsupported_architecture_raises_before_build(self, tmp_path: Path) -> None:
         source_root = tmp_path / "source"
         cache_root = tmp_path / "cache"
         cache_root.mkdir()
         source_dir = source_root / MODEL_ID.normalize()
-        _write_synthetic_checkpoint(
-            source_dir, architectures=["DeepseekV3ForCausalLM"]
-        )
+        _write_synthetic_checkpoint(source_dir, architectures=["DeepseekV3ForCausalLM"])
         shard = _make_shard(start_layer=0, end_layer=2)
         builder = _RecordingBuilder()
 

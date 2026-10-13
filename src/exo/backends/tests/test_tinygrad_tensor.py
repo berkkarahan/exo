@@ -193,8 +193,7 @@ def _max_difference(left: Tensor, right: Tensor) -> float:
     left_values.frombytes(left.float().contiguous().realize().numpy().tobytes())
     right_values.frombytes(right.float().contiguous().realize().numpy().tobytes())
     return max(
-        abs(item - peer)
-        for item, peer in zip(left_values, right_values, strict=True)
+        abs(item - peer) for item, peer in zip(left_values, right_values, strict=True)
     )
 
 

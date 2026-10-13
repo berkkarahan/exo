@@ -131,7 +131,9 @@ def plan_rank_tensors(
     return plan
 
 
-def _rewrite_layer_count(raw_config: dict[str, object], new_count: int) -> dict[str, object]:
+def _rewrite_layer_count(
+    raw_config: dict[str, object], new_count: int
+) -> dict[str, object]:
     """Pure config-dict transform: point the layer-count field(s) at ``new_count``."""
     updated = dict(raw_config)
     matched_keys = [key for key in _LAYER_COUNT_KEYS if key in updated]
@@ -172,7 +174,10 @@ def _find_cached_rank_checkpoint(cache_key: str) -> Path | None:
     before writable dirs. Presence of the completion marker is the only
     check performed -- no size computation, no disk-space check.
     """
-    all_dirs = (*download_utils.EXO_MODELS_READ_ONLY_DIRS, *download_utils.EXO_MODELS_DIRS)
+    all_dirs = (
+        *download_utils.EXO_MODELS_READ_ONLY_DIRS,
+        *download_utils.EXO_MODELS_DIRS,
+    )
     for search_dir in all_dirs:
         candidate = search_dir / _CACHE_SUBDIR / cache_key
         if (candidate / _COMPLETION_MARKER).is_file():
