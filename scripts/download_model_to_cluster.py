@@ -197,7 +197,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("model", help="HuggingFace model id, e.g. zai-org/GLM-5.1")
     parser.add_argument("--host", default="localhost")
-    parser.add_argument("--port", type=int, default=52415)
+    parser.add_argument("--port", type=int, default=52416)
     parser.add_argument(
         "--timeout",
         type=float,

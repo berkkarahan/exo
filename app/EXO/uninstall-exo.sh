@@ -6,14 +6,14 @@
 # Run with: sudo ./uninstall-exo.sh [--keep-models]
 #
 # Options:
-#   --keep-models   Preserve ~/.exo/models when removing the EXO data directory.
+#   --keep-models   Preserve ~/.wexo/models when removing the EXO data directory.
 #
 # Components removed:
 # - LaunchDaemon: /Library/LaunchDaemons/io.exo.networksetup.plist
 # - Network script: /Library/Application Support/EXO/
 # - Log files: /var/log/io.exo.networksetup.*
 # - Network location: "exo"
-# - EXO data directory: ~/.exo (or all of ~/.exo except models/ when --keep-models is set)
+# - EXO data directory: ~/.wexo (or all of ~/.wexo except models/ when --keep-models is set)
 # - Launch at login registration
 #
 
@@ -27,7 +27,7 @@ for arg in "$@"; do
     ;;
   -h | --help)
     echo "Usage: sudo ./uninstall-exo.sh [--keep-models]"
-    echo "  --keep-models   Preserve ~/.exo/models when removing the EXO data directory."
+    echo "  --keep-models   Preserve ~/.wexo/models when removing the EXO data directory."
     exit 0
     ;;
   *)
@@ -50,7 +50,7 @@ APP_BUNDLE_ID="io.exo.EXO"
 
 # Resolve the invoking user's home, even when run via sudo.
 USER_HOME="$(eval echo "~${SUDO_USER:-$USER}")"
-EXO_DIR="$USER_HOME/.exo"
+EXO_DIR="$USER_HOME/.wexo"
 
 # Colors for output
 RED='\033[0;31m'
@@ -151,20 +151,20 @@ if networksetup -listnetworkservices 2>/dev/null | grep -q "Thunderbolt Bridge";
   echo_info "Re-enabled Thunderbolt Bridge"
 fi
 
-# Remove EXO data directory (~/.exo)
+# Remove EXO data directory (~/.wexo)
 EXO_DIR_REMOVED=""
 if [[ -d $EXO_DIR ]]; then
   if [[ $KEEP_MODELS == "1" && -d "$EXO_DIR/models" ]]; then
     find "$EXO_DIR" -mindepth 1 -maxdepth 1 ! -name models -exec rm -rf {} +
     EXO_DIR_REMOVED="kept_models"
-    echo_info "Removed ~/.exo (preserved models/)"
+    echo_info "Removed ~/.wexo (preserved models/)"
   else
     rm -rf "$EXO_DIR"
     EXO_DIR_REMOVED="full"
-    echo_info "Removed ~/.exo"
+    echo_info "Removed ~/.wexo"
   fi
 else
-  echo_warn "~/.exo not found (already removed?)"
+  echo_warn "~/.wexo not found (already removed?)"
 fi
 
 # Note about launch at login registration
@@ -197,8 +197,8 @@ echo "  • Network configuration script"
 echo "  • Log files"
 echo "  • 'exo' network location"
 case "$EXO_DIR_REMOVED" in
-full) echo "  • EXO data directory (~/.exo)" ;;
-kept_models) echo "  • EXO data directory (~/.exo, models preserved)" ;;
+full) echo "  • EXO data directory (~/.wexo)" ;;
+kept_models) echo "  • EXO data directory (~/.wexo, models preserved)" ;;
 esac
 echo ""
 echo "Your network has been restored to use the 'Automatic' location."

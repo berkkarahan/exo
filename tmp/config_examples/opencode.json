@@ -3,7 +3,7 @@
   "model": "exo/mlx-community/gpt-oss-120b-MXFP4-Q8",
   "provider": {
     "exo": {
-      "api": "http://localhost:52415/v1",
+      "api": "http://localhost:52416/v1",
       "models": {
         "mlx-community/gpt-oss-120b-MXFP4-Q8": {
           "name": "GPT OSS 120B",

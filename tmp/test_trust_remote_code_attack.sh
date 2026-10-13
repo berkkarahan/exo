@@ -5,12 +5,12 @@
 
 set -uo pipefail
 
-HOST="${1:-localhost:52415}"
+HOST="${1:-localhost:52416}"
 MODEL_ID="KevTheHermit/security-testing"
 ENCODED_MODEL_ID=$(
   python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$MODEL_ID"
 )
-CUSTOM_CARDS_DIR="$HOME/.exo/custom_model_cards"
+CUSTOM_CARDS_DIR="$HOME/.wexo/custom_model_cards"
 CARD_FILE="$CUSTOM_CARDS_DIR/KevTheHermit--security-testing.toml"
 
 echo "=== Test: trust_remote_code attack via API ==="

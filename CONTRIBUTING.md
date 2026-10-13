@@ -54,7 +54,7 @@ Run `nix fmt` to auto-format your code before submitting.
 EXO uses TOML-based model cards to define model metadata and capabilities. Model cards are stored in:
 - `resources/inference_model_cards/` for text generation models
 - `resources/image_model_cards/` for image generation models
-- `~/.exo/custom_model_cards/` for user-added custom models
+- `~/.wexo/custom_model_cards/` for user-added custom models
 
 ### Adding a Model Card
 

@@ -9,7 +9,7 @@ The API is used to manage model instances in the cluster, inspect cluster state,
 Base URL example:
 
 ```
-http://localhost:52415
+http://localhost:52416
 ```
 
 ## 1. General / Meta Endpoints

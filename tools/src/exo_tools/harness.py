@@ -477,7 +477,7 @@ def find_existing_instance(client: ExoClient, model_id: str) -> str | None:
 def add_common_instance_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--host", default=os.environ.get("EXO_HOST", "localhost"))
     ap.add_argument(
-        "--port", type=int, default=int(os.environ.get("EXO_PORT", "52415"))
+        "--port", type=int, default=int(os.environ.get("EXO_PORT", "52416"))
     )
     ap.add_argument("--model", required=True, help="Model short id or huggingface id")
     ap.add_argument(

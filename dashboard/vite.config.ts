@@ -6,10 +6,10 @@ export default defineConfig({
   plugins: [tailwindcss(), sveltekit()],
   server: {
     proxy: {
-      "/v1": "http://localhost:52415",
-      "/state": "http://localhost:52415",
-      "/models": "http://localhost:52415",
-      "/instance": "http://localhost:52415",
+      "/v1": "http://localhost:52416",
+      "/state": "http://localhost:52416",
+      "/models": "http://localhost:52416",
+      "/instance": "http://localhost:52416",
     },
   },
 });
