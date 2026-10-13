@@ -65,7 +65,7 @@
       cargoArtifacts = craneLib.buildDepsOnly (
         commonArgs
         // {
-          cargoExtraArgs = "--workspace";
+          cargoExtraArgs = "--workspace --features networking/nix-sandbox";
         }
       );
     in
@@ -80,6 +80,11 @@
       };
 
       config = {
+        devShells.networking-test = pkgs.mkShell {
+          packages = [ rustToolchain pkgs.pkg-config pkgs.openssl ];
+          OPENSSL_NO_VENDOR = "1";
+        };
+
         packages = {
           # Python bindings wheel via maturin
           exo-rs = craneLib.buildPackage (
@@ -97,7 +102,7 @@
                   --release \
                   --manylinux off \
                   --manifest-path rust/exo_rs/Cargo.toml \
-                  --features "pyo3/extension-module,pyo3/experimental-async" \
+                  --features "pyo3/extension-module,pyo3/experimental-async,networking/nix-sandbox" \
                   --interpreter ${pkgs.python313}/bin/python \
                   --out dist
               '';
@@ -119,7 +124,7 @@
             commonArgs
             // {
               inherit cargoArtifacts;
-              cargoExtraArgs = "--workspace";
+              cargoExtraArgs = "--workspace --features networking/nix-sandbox";
             }
           );
           # Run tests with nextest
@@ -127,7 +132,7 @@
             commonArgs
             // {
               inherit cargoArtifacts;
-              cargoExtraArgs = "--workspace";
+              cargoExtraArgs = "--workspace --features networking/nix-sandbox";
             }
           );
 

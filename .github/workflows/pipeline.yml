@@ -116,6 +116,9 @@ jobs:
           "$TEST_ENV/bin/python" -c 'import mlx.core; import mlx_lm'
           "$TEST_ENV/bin/python" -m pytest -q
 
+      - name: Run live Rust networking test (macOS and Linux)
+        run: nix develop .#networking-test --command cargo test -p networking dynamic_listener_port_is_used_for_discovery -- --nocapture
+
       - name: Build all Nix outputs
         run: |
           nix flake show --json | jq -r '
@@ -144,3 +147,5 @@ jobs:
           enable-cache: true
       - name: Run pytest
         run: uv run pytest -q
+      - name: Run live Rust networking test
+        run: cargo test -p networking dynamic_listener_port_is_used_for_discovery -- --nocapture

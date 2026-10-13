@@ -158,6 +158,11 @@ mod tests {
         assert!(super::cfg("11111111111111111111111111111111", 0).is_ok());
     }
 
+    // Nix builds deny sockets; CI runs this integration test outside the sandbox.
+    #[cfg_attr(
+        feature = "nix-sandbox",
+        ignore = "TCP sockets are unavailable in Nix builds"
+    )]
     #[tokio::test(flavor = "multi_thread")]
     async fn dynamic_listener_port_is_used_for_discovery() {
         let config = super::cfg("11111111111111111111111111111111", 0).unwrap();
