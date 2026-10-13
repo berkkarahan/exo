@@ -44,3 +44,4 @@ tmp/models
 /.codex
 skills-lock.json
 .omo
+.opencode

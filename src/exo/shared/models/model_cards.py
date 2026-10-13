@@ -96,6 +96,27 @@ class _CardCache:
 card_cache = _CardCache()
 
 
+async def load_persisted_custom_cards() -> list["ModelCard"]:
+    """Read user-added model cards from the durable TOML directory.
+
+    Unlike ``card_cache.refresh`` this does not load the built-in catalogue,
+    so it is cheap to call during worker startup.
+    """
+    cards: list["ModelCard"] = []
+    if not await _custom_cards_dir.exists():
+        return cards
+    async for toml_file in _custom_cards_dir.rglob("*.toml"):
+        try:
+            card = await ModelCard.load_from_path(toml_file)
+        except (ValidationError, TOMLKitError) as e:
+            logger.opt(exception=e).warning(
+                f"failed to validate custom model card at {toml_file}"
+            )
+            continue
+        cards.append(card.model_copy(update={"is_custom": True}))
+    return cards
+
+
 def detect_vision_from_config(model_id: ModelId) -> "VisionCardConfig | None":
     normalized = model_id.normalize()
     for model_dir in [d / normalized for d in EXO_MODELS_DIRS]:

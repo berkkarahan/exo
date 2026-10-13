@@ -1,9 +1,11 @@
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Sequence
 
 import anyio
 import pytest
 from loguru import logger
+from pytest import MonkeyPatch
 
 from exo.master.main import Master
 from exo.routing.router import get_node_zid
@@ -48,7 +50,10 @@ from exo.utils.info_gatherer.info_gatherer import NodeBackends
 
 
 @pytest.mark.asyncio
-async def test_master():
+async def test_master(tmp_path: Path, monkeypatch: MonkeyPatch):
+    # Isolate the event log so durable-event replay does not read state left
+    # behind by previous runs.
+    monkeypatch.setattr("exo.master.main.EXO_EVENT_LOG_DIR", tmp_path / "event_log")
     node_id = get_node_zid()
     session_id = SessionId(master_node_id=node_id, election_clock=0)
 

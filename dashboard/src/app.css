@@ -4,41 +4,41 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-	/* EXO Brand Colors - Command Center Theme (neutral dark greys) */
-	--exo-black: oklch(0.12 0 0);
-	--exo-dark-gray: oklch(0.16 0 0);
-	--exo-medium-gray: oklch(0.22 0 0);
-	--exo-light-gray: oklch(0.6 0 0);
-	--exo-yellow: oklch(0.85 0.18 85);
-	--exo-yellow-darker: oklch(0.7 0.16 85);
-	--exo-yellow-glow: oklch(0.9 0.2 85);
+	/* wEXO Brand Colors - Command Center Theme (neutral dark greys) */
+	--wEXO-black: oklch(0.12 0 0);
+	--wEXO-dark-gray: oklch(0.16 0 0);
+	--wEXO-medium-gray: oklch(0.22 0 0);
+	--wEXO-light-gray: oklch(0.6 0 0);
+	--wEXO-yellow: oklch(0.85 0.18 85);
+	--wEXO-yellow-darker: oklch(0.7 0.16 85);
+	--wEXO-yellow-glow: oklch(0.9 0.2 85);
 	
 	/* Gotham-inspired accent colors */
-	--exo-grid: oklch(0.25 0 0);
-	--exo-scanline: oklch(0.15 0 0);
-	--exo-glow-yellow: 0 0 20px oklch(0.85 0.18 85 / 0.3);
-	--exo-glow-yellow-strong: 0 0 40px oklch(0.85 0.18 85 / 0.5);
+	--wEXO-grid: oklch(0.25 0 0);
+	--wEXO-scanline: oklch(0.15 0 0);
+	--wEXO-glow-yellow: 0 0 20px oklch(0.85 0.18 85 / 0.3);
+	--wEXO-glow-yellow-strong: 0 0 40px oklch(0.85 0.18 85 / 0.5);
 	
 	/* Theme Variables */
 	--radius: 0.375rem;
-	--background: var(--exo-black);
+	--background: var(--wEXO-black);
 	--foreground: oklch(0.9 0 0);
-	--card: var(--exo-dark-gray);
+	--card: var(--wEXO-dark-gray);
 	--card-foreground: oklch(0.9 0 0);
-	--popover: var(--exo-dark-gray);
+	--popover: var(--wEXO-dark-gray);
 	--popover-foreground: oklch(0.9 0 0);
-	--primary: var(--exo-yellow);
-	--primary-foreground: var(--exo-black);
-	--secondary: var(--exo-medium-gray);
+	--primary: var(--wEXO-yellow);
+	--primary-foreground: var(--wEXO-black);
+	--secondary: var(--wEXO-medium-gray);
 	--secondary-foreground: oklch(0.9 0 0);
-	--muted: var(--exo-medium-gray);
-	--muted-foreground: var(--exo-light-gray);
-	--accent: var(--exo-medium-gray);
+	--muted: var(--wEXO-medium-gray);
+	--muted-foreground: var(--wEXO-light-gray);
+	--accent: var(--wEXO-medium-gray);
 	--accent-foreground: oklch(0.9 0 0);
 	--destructive: oklch(0.6 0.25 25);
 	--border: oklch(0.22 0 0);
 	--input: oklch(0.22 0 0);
-	--ring: var(--exo-yellow);
+	--ring: var(--wEXO-yellow);
 }
 
 @theme inline {
@@ -65,13 +65,13 @@
 	--color-input: var(--input);
 	--color-ring: var(--ring);
 	
-	/* Custom EXO colors */
-	--color-exo-yellow: var(--exo-yellow);
-	--color-exo-yellow-darker: var(--exo-yellow-darker);
-	--color-exo-black: var(--exo-black);
-	--color-exo-dark-gray: var(--exo-dark-gray);
-	--color-exo-medium-gray: var(--exo-medium-gray);
-	--color-exo-light-gray: var(--exo-light-gray);
+	/* Custom wEXO colors */
+	--color-wEXO-yellow: var(--wEXO-yellow);
+	--color-wEXO-yellow-darker: var(--wEXO-yellow-darker);
+	--color-wEXO-black: var(--wEXO-black);
+	--color-wEXO-dark-gray: var(--wEXO-dark-gray);
+	--color-wEXO-medium-gray: var(--wEXO-medium-gray);
+	--color-wEXO-light-gray: var(--wEXO-light-gray);
 }
 
 @layer base {

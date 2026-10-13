@@ -4,7 +4,7 @@
 
 import { browser } from "$app/environment";
 
-const FAVORITES_KEY = "exo-favorite-models";
+const FAVORITES_KEY = "wEXO-favorite-models";
 
 class FavoritesStore {
   favorites = $state<Set<string>>(new Set());

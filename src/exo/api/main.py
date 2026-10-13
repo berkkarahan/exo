@@ -1862,9 +1862,10 @@ class API:
             )
         )
 
-        # Immediately update the local cache so the subsequent GET /models
-        # returns the new model without waiting for the event round-trip.
-        model_cards.card_cache.cc[card.model_id] = card
+        # Persist the card so it survives a restart, and update the in-memory
+        # cache so the subsequent GET /models returns the new model without
+        # waiting for the event round-trip.
+        await model_cards.card_cache.save(card)
 
         return ModelListModel(
             id=card.model_id,

@@ -127,7 +127,7 @@ struct ContentView: View {
     private var statusSection: some View {
         HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("EXO")
+                Text("wEXO")
                     .font(.headline)
                 Text(controller.status.displayText)
                     .font(.caption)
@@ -306,7 +306,7 @@ struct ContentView: View {
             tint: .primary,
             trailingSystemImage: "arrow.up.right"
         ) {
-            guard let url = URL(string: "http://localhost:52415/") else { return }
+            guard let url = URL(string: "http://localhost:52416/") else { return }
             NSWorkspace.shared.open(url)
         }
     }
@@ -316,13 +316,13 @@ struct ContentView: View {
             Image(systemName: "link")
                 .imageScale(.small)
                 .foregroundColor(.secondary)
-            Text("localhost:52415/v1")
+            Text("localhost:52416/v1")
                 .font(.system(.caption, design: .monospaced))
                 .foregroundColor(.primary)
             Spacer()
             Button {
                 NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString("http://localhost:52415/v1", forType: .string)
+                NSPasteboard.general.setString("http://localhost:52416/v1", forType: .string)
                 baseURLCopied = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                     baseURLCopied = false

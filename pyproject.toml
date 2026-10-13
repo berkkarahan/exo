@@ -90,7 +90,10 @@ members = ["rust/exo_rs", "bench", "tools"]
 [tool.uv.sources]
 exo-rs = { workspace = true }
 mlx = [
-  { git = "https://github.com/rltakashige/mlx-jaccl-fix-small-recv.git", branch = "address-rdma-gpu-locks", marker = "sys_platform == 'darwin'" },
+  # wEXO: on macOS use the official prebuilt MLX wheel. The pinned JACCL fork
+  # (rltakashige/mlx-jaccl-fix-small-recv) no longer compiles with Xcode 27's
+  # Metal compiler (see ml-explore/mlx#4533). The wheel is the same 0.32.0 the
+  # fork is based on; it supports mx.distributed "ring" but not "jaccl".
   { url = "https://github.com/rltakashige/mlx-jaccl-fix-small-recv/releases/download/mlx_cuda/mlx-0.32.0-cp313-cp313-manylinux_2_35_aarch64.whl", marker = "sys_platform == 'linux' and platform_machine == 'aarch64'" },
   { url = "https://github.com/rltakashige/mlx-jaccl-fix-small-recv/releases/download/mlx_cuda/mlx-0.32.0-cp313-cp313-manylinux_2_35_x86_64.whl", marker = "sys_platform == 'linux' and platform_machine != 'aarch64'" },
 ]

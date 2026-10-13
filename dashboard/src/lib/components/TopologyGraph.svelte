@@ -208,7 +208,7 @@
       .append("path")
       .attr("d", "M 0 0 L 10 5 L 0 10")
       .attr("fill", "none")
-      .attr("stroke", "var(--exo-light-gray, #B3B3B3)")
+      .attr("stroke", "var(--wEXO-light-gray, #B3B3B3)")
       .attr("stroke-width", "1.6")
       .attr("stroke-linecap", "round")
       .attr("stroke-linejoin", "round")
@@ -1246,7 +1246,7 @@
     transition: opacity 0.2s ease;
   }
   :global(.graph-link) {
-    stroke: var(--exo-light-gray, #b3b3b3);
+    stroke: var(--wEXO-light-gray, #b3b3b3);
     stroke-width: 1px;
     stroke-dasharray: 4, 4;
     opacity: 0.8;

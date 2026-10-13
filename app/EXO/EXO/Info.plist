@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>SUFeedURL</key>
-	<string>https://assets.exolabs.net/appcast.xml</string>
+	<string></string>
 	<key>EXOBuildTag</key>
 	<string>$(EXO_BUILD_TAG)</string>
 	<key>EXOBuildCommit</key>

@@ -149,7 +149,9 @@ def test_loader_realizes_one_layer_and_forwards(
         str(tmp_path / "model.safetensors"),
     )
 
-    def use_temporary_directory(model_id: ModelId) -> Path:
+    def use_temporary_directory(
+        model_id: ModelId, card: ModelCard | None = None
+    ) -> Path:
         _ = model_id
         return tmp_path
 
@@ -196,7 +198,9 @@ def test_pinned_interval_replaces_the_previous_shard(
         str(tmp_path / "model.safetensors"),
     )
 
-    def use_temporary_directory(model_id: ModelId) -> Path:
+    def use_temporary_directory(
+        model_id: ModelId, card: ModelCard | None = None
+    ) -> Path:
         _ = model_id
         return tmp_path
 

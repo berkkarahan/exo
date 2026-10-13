@@ -93,7 +93,9 @@ def test_selected_header_bytes_ignore_other_layers(
         },
     )
 
-    def use_temporary_directory(model_id: ModelId) -> Path:
+    def use_temporary_directory(
+        model_id: ModelId, card: ModelCard | None = None
+    ) -> Path:
         _ = model_id
         return tmp_path
 
@@ -134,7 +136,9 @@ def test_index_uses_the_global_name_set_for_tied_embeddings(
         )
     )
 
-    def use_temporary_directory(model_id: ModelId) -> Path:
+    def use_temporary_directory(
+        model_id: ModelId, card: ModelCard | None = None
+    ) -> Path:
         _ = model_id
         return tmp_path
 

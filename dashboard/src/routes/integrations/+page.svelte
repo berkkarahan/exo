@@ -8,7 +8,7 @@
 
   const apiUrl = browser
     ? window.location.origin.replace("localhost", "127.0.0.1")
-    : "http://127.0.0.1:52415";
+    : "http://127.0.0.1:52416";
 
   const instancesData = $derived(instances());
 
@@ -173,9 +173,9 @@
       {
         $schema: "https://opencode.ai/config.json",
         provider: {
-          exo: {
+          wEXO: {
             npm: "@ai-sdk/openai-compatible",
-            name: "exo",
+            name: "wEXO",
             options: {
               baseURL: `${apiUrl}/v1`,
               apiKey: "x",
@@ -183,7 +183,7 @@
             models,
           },
         },
-        model: `exo/${firstModel}`,
+        model: `wEXO/${firstModel}`,
       },
       null,
       2,
@@ -195,10 +195,10 @@
   const codexConfig = $derived(
     [
       `model = "${codexModel}"`,
-      `model_provider = "exo"`,
+      `model_provider = "wEXO"`,
       ``,
-      `[model_providers.exo]`,
-      `name = "exo"`,
+      `[model_providers.wEXO]`,
+      `name = "wEXO"`,
       `base_url = "${apiUrl}/v1"`,
       `env_key = "EXO_API_KEY"`,
       ``,
@@ -214,14 +214,14 @@
         gateway: { mode: "local" },
         models: {
           providers: {
-            exo: {
+            wEXO: {
               baseUrl: `${apiUrl}/v1`,
               apiKey: "x",
               api: "openai-completions",
               models: [
                 {
                   id: openClawModel,
-                  name: "exo local",
+                  name: "wEXO local",
                   input: (modelCapabilities[openClawModel] || []).includes(
                     "vision",
                   )
@@ -234,7 +234,7 @@
         },
         agents: {
           defaults: {
-            model: `exo/${openClawModel}`,
+            model: `wEXO/${openClawModel}`,
           },
         },
       },
@@ -253,7 +253,7 @@
         entry.input = ["text", "image"];
       }
       // Mark thinking-capable models so pi surfaces its thinking-level selector
-      // for them. exo capability strings: "thinking" (model emits reasoning
+      // for them. wEXO capability strings: "thinking" (model emits reasoning
       // content) and "thinking_toggle" (user can turn it on/off).
       if (caps.includes("thinking") || caps.includes("thinking_toggle")) {
         entry.reasoning = true;
@@ -269,13 +269,13 @@
     return JSON.stringify(
       {
         providers: {
-          exo: {
+          wEXO: {
             baseUrl: `${apiUrl}/v1`,
             api: "openai-completions",
-            apiKey: "exo",
+            apiKey: "wEXO",
             compat: {
               supportsDeveloperRole: false,
-              // exo's OpenAI surface takes a boolean `enable_thinking` toggle,
+              // wEXO's OpenAI surface takes a boolean `enable_thinking` toggle,
               // not graded effort levels, so disable pi's `reasoning_effort`
               // parameter and use the matching top-level-boolean format.
               supportsReasoningEffort: false,
@@ -290,7 +290,7 @@
     );
   });
 
-  const piShellCommand = $derived(`pi --provider exo --model ${piModel}`);
+  const piShellCommand = $derived(`pi --provider wEXO --model ${piModel}`);
 
   const ollamaCommand = $derived(
     `OLLAMA_HOST=${apiUrl}/ollama ollama run ${modelsBySize.length > 0 ? modelsBySize[0] : "your-model-id"}`,
@@ -357,16 +357,16 @@
     "Firefox",
   ] as const;
   type Tab = (typeof tabs)[number];
-  const stored = browser ? localStorage.getItem("exo-integrations-tab") : null;
+  const stored = browser ? localStorage.getItem("wEXO-integrations-tab") : null;
   let activeTab = $state<Tab>(
     stored && tabs.includes(stored as Tab) ? (stored as Tab) : "Claude Code",
   );
   $effect(() => {
-    if (browser) localStorage.setItem("exo-integrations-tab", activeTab);
+    if (browser) localStorage.setItem("wEXO-integrations-tab", activeTab);
   });
 
   const selectClass =
-    "bg-black/30 border border-exo-light-gray/20 rounded px-2 py-1.5 text-white font-mono text-xs focus:border-exo-yellow/50 focus:outline-none appearance-none cursor-pointer";
+    "bg-black/30 border border-wEXO-light-gray/20 rounded px-2 py-1.5 text-white font-mono text-xs focus:border-wEXO-yellow/50 focus:outline-none appearance-none cursor-pointer";
 
   onMount(async () => {
     refreshState();
@@ -398,7 +398,7 @@
   });
 </script>
 
-<div class="min-h-screen bg-exo-dark-gray flex flex-col">
+<div class="min-h-screen bg-wEXO-dark-gray flex flex-col">
   <HeaderNav showHome={true} />
 
   <main
@@ -411,28 +411,28 @@
       >
         Integrations
       </h1>
-      <p class="text-exo-light-gray/60 text-sm">
-        Connect external tools to your exo cluster.
+      <p class="text-wEXO-light-gray/60 text-sm">
+        Connect external tools to your wEXO cluster.
       </p>
     </div>
 
     <!-- Status -->
     <div class="mb-8">
-      <span class="text-exo-light-gray/70 text-xs uppercase tracking-wider"
+      <span class="text-wEXO-light-gray/70 text-xs uppercase tracking-wider"
         >API Endpoint</span
       >
       <span class="text-white font-mono text-sm ml-2">{apiUrl}</span>
       {#if runningModels.length > 0}
-        <div class="text-exo-light-gray/50 text-xs mt-2">
+        <div class="text-wEXO-light-gray/50 text-xs mt-2">
           Running model{runningModels.length > 1 ? "s" : ""}:
           <ul class="mt-1 space-y-0.5 list-none">
             {#each runningModels as model}
-              <li class="text-exo-yellow font-mono">{model}</li>
+              <li class="text-wEXO-yellow font-mono">{model}</li>
             {/each}
           </ul>
         </div>
       {:else}
-        <p class="text-exo-light-gray/40 text-xs mt-2 italic">
+        <p class="text-wEXO-light-gray/40 text-xs mt-2 italic">
           No models currently running
         </p>
       {/if}
@@ -441,28 +441,28 @@
     <!-- API Endpoints -->
     <div class="mb-8">
       <div
-        class="flex flex-col sm:flex-row gap-3 text-xs font-mono text-exo-light-gray/70"
+        class="flex flex-col sm:flex-row gap-3 text-xs font-mono text-wEXO-light-gray/70"
       >
         <div
-          class="flex-1 bg-black/20 border border-exo-light-gray/10 rounded px-3 py-2"
+          class="flex-1 bg-black/20 border border-wEXO-light-gray/10 rounded px-3 py-2"
         >
-          <span class="text-exo-light-gray/40 text-[10px] uppercase block mb-1"
+          <span class="text-wEXO-light-gray/40 text-[10px] uppercase block mb-1"
             >OpenAI-compatible</span
           >
           <span class="text-white/80">{apiUrl}/v1</span>
         </div>
         <div
-          class="flex-1 bg-black/20 border border-exo-light-gray/10 rounded px-3 py-2"
+          class="flex-1 bg-black/20 border border-wEXO-light-gray/10 rounded px-3 py-2"
         >
-          <span class="text-exo-light-gray/40 text-[10px] uppercase block mb-1"
+          <span class="text-wEXO-light-gray/40 text-[10px] uppercase block mb-1"
             >Claude-compatible</span
           >
           <span class="text-white/80">{apiUrl}</span>
         </div>
         <div
-          class="flex-1 bg-black/20 border border-exo-light-gray/10 rounded px-3 py-2"
+          class="flex-1 bg-black/20 border border-wEXO-light-gray/10 rounded px-3 py-2"
         >
-          <span class="text-exo-light-gray/40 text-[10px] uppercase block mb-1"
+          <span class="text-wEXO-light-gray/40 text-[10px] uppercase block mb-1"
             >Ollama-compatible</span
           >
           <span class="text-white/80">{apiUrl}/ollama</span>
@@ -472,15 +472,15 @@
 
     <!-- Tabs -->
     <div
-      class="flex flex-wrap gap-2 mb-6 border-b border-exo-light-gray/10 pb-3"
+      class="flex flex-wrap gap-2 mb-6 border-b border-wEXO-light-gray/10 pb-3"
     >
       {#each tabs as tab}
         <button
           onclick={() => (activeTab = tab)}
           class="px-3 py-1.5 text-xs rounded-md transition-all cursor-pointer
             {activeTab === tab
-            ? 'bg-exo-yellow/15 text-exo-yellow border border-exo-yellow/30'
-            : 'text-exo-light-gray/60 hover:text-white/80 border border-transparent hover:border-exo-light-gray/20'}"
+            ? 'bg-wEXO-yellow/15 text-wEXO-yellow border border-wEXO-yellow/30'
+            : 'text-wEXO-light-gray/60 hover:text-white/80 border border-transparent hover:border-wEXO-light-gray/20'}"
         >
           {tab}
         </button>
@@ -495,7 +495,7 @@
             {#each [{ label: "Opus", bind: () => opusModel, set: (v: string) => (opusModel = v) }, { label: "Sonnet", bind: () => sonnetModel, set: (v: string) => (sonnetModel = v) }, { label: "Haiku", bind: () => haikuModel, set: (v: string) => (haikuModel = v) }] as tier}
               <div>
                 <span
-                  class="text-exo-light-gray/50 text-[10px] uppercase tracking-wider block mb-1"
+                  class="text-wEXO-light-gray/50 text-[10px] uppercase tracking-wider block mb-1"
                   >{tier.label}</span
                 >
                 <select
@@ -515,7 +515,7 @@
         <IntegrationCard
           title="Shell Command"
           subtitle="Run in terminal"
-          description="Launch Claude Code with exo as the backend. Paste this into your terminal."
+          description="Launch Claude Code with wEXO as the backend. Paste this into your terminal."
           config={claudeShellCommand}
           language="bash"
         />
@@ -537,7 +537,7 @@
           {#if runningModels.length > 1}
             <div>
               <span
-                class="text-exo-light-gray/50 text-[10px] uppercase tracking-wider block mb-1"
+                class="text-wEXO-light-gray/50 text-[10px] uppercase tracking-wider block mb-1"
                 >Model</span
               >
               <select bind:value={codexModel} class={selectClass}>
@@ -549,13 +549,13 @@
           {/if}
           <div class="flex-1">
             <span
-              class="text-exo-light-gray/50 text-[10px] uppercase tracking-wider block mb-1"
+              class="text-wEXO-light-gray/50 text-[10px] uppercase tracking-wider block mb-1"
               >MCP Filesystem Path</span
             >
             <input
               type="text"
               bind:value={codexMcpPath}
-              class="w-full bg-black/30 border border-exo-light-gray/20 rounded px-2 py-1.5 text-white font-mono text-xs focus:border-exo-yellow/50 focus:outline-none"
+              class="w-full bg-black/30 border border-wEXO-light-gray/20 rounded px-2 py-1.5 text-white font-mono text-xs focus:border-wEXO-yellow/50 focus:outline-none"
             />
           </div>
         </div>
@@ -568,7 +568,7 @@
         <IntegrationCard
           title="Shell Command"
           subtitle="Run in terminal"
-          description="Launch Codex with exo as the backend."
+          description="Launch Codex with wEXO as the backend."
           config={codexShellCommand}
           language="bash"
         />
@@ -576,7 +576,7 @@
         {#if runningModels.length > 1}
           <div class="text-xs">
             <span
-              class="text-exo-light-gray/50 text-[10px] uppercase tracking-wider block mb-1"
+              class="text-wEXO-light-gray/50 text-[10px] uppercase tracking-wider block mb-1"
               >Model</span
             >
             <select bind:value={openClawModel} class={selectClass}>
@@ -596,14 +596,14 @@
           title="Setup Commands"
           subtitle="Run in terminal"
           description="After saving the config, run these commands to fix metadata and start the gateway."
-          config={`openclaw doctor --fix${(modelCapabilities[openClawModel] || []).includes("vision") ? `\nopenclaw models set-image exo/${openClawModel}` : ""}\nopenclaw gateway &\nopenclaw dashboard`}
+          config={`openclaw doctor --fix${(modelCapabilities[openClawModel] || []).includes("vision") ? `\nopenclaw models set-image wEXO/${openClawModel}` : ""}\nopenclaw gateway &\nopenclaw dashboard`}
           language="bash"
         />
       {:else if activeTab === "Pi"}
         {#if runningModels.length > 1}
           <div class="text-xs">
             <span
-              class="text-exo-light-gray/50 text-[10px] uppercase tracking-wider block mb-1"
+              class="text-wEXO-light-gray/50 text-[10px] uppercase tracking-wider block mb-1"
               >Model</span
             >
             <select bind:value={piModel} class={selectClass}>
@@ -616,13 +616,13 @@
         <IntegrationCard
           title="Models Config"
           subtitle="~/.pi/agent/models.json"
-          description="Register exo as a custom provider in pi. Create or edit this file, then run pi and pick an exo model via /model. Install pi with: npm install -g @mariozechner/pi-coding-agent"
+          description="Register wEXO as a custom provider in pi. Create or edit this file, then run pi and pick an wEXO model via /model. Install pi with: npm install -g @mariozechner/pi-coding-agent"
           config={piModelsJson}
         />
         <IntegrationCard
           title="Shell Command"
           subtitle="Run in terminal"
-          description="Launch pi directly with the exo provider and model selected."
+          description="Launch pi directly with the wEXO provider and model selected."
           config={piShellCommand}
           language="bash"
         />
@@ -666,20 +666,20 @@
         <IntegrationCard
           title="3. Add OpenAI Credential"
           subtitle="n8n UI → Credentials"
-          description="Create an OpenAI credential pointing at your exo cluster."
+          description="Create an OpenAI credential pointing at your wEXO cluster."
           config={n8nCredentialSteps}
         />
         <IntegrationCard
           title="4. Build a Workflow"
           subtitle="n8n UI → Workflows"
-          description="Create a workflow that uses your exo-powered model."
+          description="Create a workflow that uses your wEXO-powered model."
           config={n8nWorkflowSteps}
         />
       {:else if activeTab === "Firefox"}
         <IntegrationCard
           title="Firefox AI Chatbot"
           subtitle="about:config"
-          description="Use the exo dashboard as Firefox's built-in AI chatbot. Requires Firefox 130+."
+          description="Use the wEXO dashboard as Firefox's built-in AI chatbot. Requires Firefox 130+."
           config={firefoxConfig}
         />
       {/if}

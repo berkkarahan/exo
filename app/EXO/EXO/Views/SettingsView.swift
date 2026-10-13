@@ -190,7 +190,7 @@ struct SettingsView: View {
                     }
                     Spacer()
                     Button("Reset") {
-                        guard let url = URL(string: "http://localhost:52415/?reset-onboarding")
+                        guard let url = URL(string: "http://localhost:52416/?reset-onboarding")
                         else { return }
                         NSWorkspace.shared.open(url)
                     }
@@ -243,7 +243,7 @@ struct SettingsView: View {
                     TextField(
                         "",
                         text: $pendingDefaultModelsDir,
-                        prompt: Text("~/.exo/models")
+                        prompt: Text("~/.wexo/models")
                     )
                     .textFieldStyle(.roundedBorder)
                     .font(.system(.body, design: .monospaced))
@@ -524,15 +524,15 @@ struct SettingsView: View {
 
             • Network configuration daemon
             • Launch at login registration
-            • EXO network location
-            • EXO data directory (~/.exo)
+            • wEXO network location
+            • wEXO data directory (~/.wexo)
 
             The app will be moved to Trash.
             """
         alert.alertStyle = .warning
 
         let checkbox = NSButton(
-            checkboxWithTitle: "Keep downloaded models (~/.exo/models)",
+            checkboxWithTitle: "Keep downloaded models (~/.wexo/models)",
             target: nil, action: nil)
         checkbox.state = .off
         checkbox.sizeToFit()
