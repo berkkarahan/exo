@@ -63,10 +63,68 @@ let
           '';
         };
       };
-      # macOS now uses the official prebuilt MLX wheel; the old source-build
-      # patch cannot apply to that wheel and is no longer needed.
       buildSystemsOverlay = final: prev:
-        lib.optionalAttrs isLinux {
+        lib.optionalAttrs isDarwin
+          {
+            mlx = prev.mlx.overrideAttrs (old:
+              let
+                # Static dependencies included directly during compilation
+                gguf-tools = pkgs.fetchFromGitHub {
+                  owner = "antirez";
+                  repo = "gguf-tools";
+                  rev = "8fa6eb65236618e28fd7710a0fba565f7faa1848";
+                  hash = "sha256-15FvyPOFqTOr5vdWQoPnZz+mYH919++EtghjozDlnSA=";
+                };
+
+                metal_cpp = pkgs.fetchzip {
+                  url = "https://developer.apple.com/metal/cpp/files/metal-cpp_26.zip";
+                  hash = "sha256-7n2eI2lw/S+Us6l7YPAATKwcIbRRpaQ8VmES7S8ZjY8=";
+                };
+
+                nanobind = pkgs.fetchFromGitHub {
+                  owner = "wjakob";
+                  repo = "nanobind";
+                  rev = "v2.10.2";
+                  hash = "sha256-io44YhN+VpfHFWyvvLWSanRgbzA0whK8WlDNRi3hahU=";
+                  fetchSubmodules = true;
+                };
+              in
+              {
+                nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.cmake self'.packages.metal-toolchain ];
+                # TODO: non-sdk_26 support
+                buildInputs = (old.buildInputs or [ ])
+                ++ [ gguf-tools pkgs.fmt pkgs.nlohmann_json pkgs.apple-sdk_26 ];
+                patches = [
+                  (pkgs.replaceVars ../nix/darwin-build-fixes.patch {
+                    sdkVersion = pkgs.apple-sdk_26.version;
+                    inherit (self'.packages.metal-toolchain) metalVersion;
+                  })
+                ];
+                postPatch = ''
+                  substituteInPlace mlx/backend/cpu/jit_compiler.cpp \
+                    --replace-fail "g++" "${lib.getExe' pkgs.stdenv.cc "c++"}"
+                '';
+
+                DEV_RELEASE = 1;
+                CMAKE_ARGS = toString ([
+                  (lib.cmakeBool "USE_SYSTEM_FMT" true)
+                  (lib.cmakeOptionType "filepath" "FETCHCONTENT_SOURCE_DIR_GGUFLIB" "${gguf-tools}")
+                  (lib.cmakeOptionType "filepath" "FETCHCONTENT_SOURCE_DIR_JSON" "${pkgs.nlohmann_json.src}")
+                  (lib.cmakeOptionType "filepath" "FETCHCONTENT_SOURCE_DIR_NANOBIND" "${nanobind}")
+                  (lib.cmakeBool "FETCHCONTENT_FULLY_DISCONNECTED" true)
+                  (lib.cmakeBool "MLX_BUILD_CPU" true)
+                  (lib.cmakeBool "MLX_BUILD_METAL" true)
+                  (lib.cmakeOptionType "string" "CMAKE_INSTALL_LIBDIR" "lib")
+                  (lib.cmakeOptionType "filepath" "FETCHCONTENT_SOURCE_DIR_METAL_CPP" "${metal_cpp}")
+                  (lib.cmakeOptionType "string" "CMAKE_OSX_DEPLOYMENT_TARGET" "${pkgs.apple-sdk_26.version}")
+                  (lib.cmakeOptionType "filepath" "CMAKE_OSX_SYSROOT" "${pkgs.apple-sdk_26.passthru.sdkroot}")
+                ] ++ lib.optionals (isDarwin && isx86_64) [
+                  (lib.cmakeBool "MLX_ENABLE_X64_MAC" true)
+                ]);
+                SDKROOT = pkgs.apple-sdk_26.passthru.sdkroot;
+                MACOSX_DEPLOYMENT_TARGET = pkgs.apple-sdk_26.version;
+              });
+          } // lib.optionalAttrs isLinux {
           mlx = prev.mlx.overrideAttrs (old: {
             nativeBuildInputs = old.nativeBuildInputs ++ lib.optionals cudaSupport [ pkgs.autoAddDriverRunpath ];
             buildInputs = old.buildInputs ++ lib.optionals cudaSupport cudaLibs;

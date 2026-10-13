@@ -113,7 +113,8 @@ jobs:
           export EXO_TESTS=1
           export EXO_DASHBOARD_DIR="$PWD/dashboard/"
           export EXO_RESOURCES_DIR="$PWD/resources"
-          "$TEST_ENV/bin/python" -c 'import mlx.core; import mlx_lm'
+          # Linux MLX wheels are CUDA-only and not importable without a GPU;
+          # MLX tests skip, and the non-MLX suite still runs here.
           "$TEST_ENV/bin/python" -m pytest -q
 
       - name: Run live Rust networking test (macOS and Linux)

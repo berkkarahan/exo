@@ -66,7 +66,7 @@ mlx = [
 ]
 mlx-cpu = [
   "exo[mlx]",
-  "mlx-cpu==0.32.0; sys_platform == 'linux'",
+  "mlx-cpu==0.31.2; sys_platform == 'linux'",
   "torch==2.10.0; sys_platform == 'linux'",
   "torchvision==0.25.0; sys_platform == 'linux'",
   "torchaudio==2.10.0; sys_platform == 'linux'",
