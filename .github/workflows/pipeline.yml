@@ -91,18 +91,6 @@ jobs:
             nix build .#metal-toolchain
           fi
 
-      - name: Build all Nix outputs
-        run: |
-          nix flake show --json | jq -r '
-            [
-              (.packages."${{ matrix.system }}" // {} | keys[] | ".#packages.${{ matrix.system }}.\(.)"),
-              (.devShells."${{ matrix.system }}" // {} | keys[] | ".#devShells.${{ matrix.system }}.\(.)")
-            ] | .[]
-          ' | xargs nix build
-
-      - name: Run nix flake check
-        run: nix flake check
-
       - name: Run pytest (macOS)
         if: runner.os == 'macOS'
         run: |
@@ -127,6 +115,18 @@ jobs:
           export EXO_RESOURCES_DIR="$PWD/resources"
           "$TEST_ENV/bin/python" -c 'import mlx.core; import mlx_lm'
           "$TEST_ENV/bin/python" -m pytest -q
+
+      - name: Build all Nix outputs
+        run: |
+          nix flake show --json | jq -r '
+            [
+              (.packages."${{ matrix.system }}" // {} | keys[] | ".#packages.${{ matrix.system }}.\(.)"),
+              (.devShells."${{ matrix.system }}" // {} | keys[] | ".#devShells.${{ matrix.system }}.\(.)")
+            ] | .[]
+          ' | xargs nix build
+
+      - name: Run nix flake check
+        run: nix flake check
 
   windows-tests:
     name: Run pytest (Windows)
