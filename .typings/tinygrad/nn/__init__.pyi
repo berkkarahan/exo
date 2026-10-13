@@ -2,7 +2,6 @@
 
 from tinygrad.tensor import Tensor
 
-
 class Linear:
     weight: Tensor
     bias: Tensor | None
