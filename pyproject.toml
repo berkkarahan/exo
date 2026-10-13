@@ -27,6 +27,7 @@ dependencies = [
   "zstandard>=0.23.0",
   "transformers>=5.6.2",
   "python-daemon>=3.1.2",
+  "torch>=2.10.0,<2.14",
 ]
 
 [project.scripts]
@@ -43,6 +44,8 @@ dev = [
   "pytest-asyncio>=1.0.0",
   "pytest-env",
   "ruff>=0.11.13",
+  # Image APIs are checked on every platform, even without the MLX runtime.
+  "pillow>=12.0.0",
 ]
 
 [project.optional-dependencies]
@@ -150,6 +153,9 @@ build-backend = "uv_build"
 include = ["src", "bench", "tools"]
 typeCheckingMode = "strict"
 failOnWarnings = true
+# Optional native runtimes need not be installed to check their checked-in stubs.
+# Keep missing imports and all strict type diagnostics enabled.
+reportMissingModuleSource = false
 
 reportAny = "error"
 reportUnknownVariableType = "error"
@@ -184,6 +190,7 @@ reportMissingModuleSource = false
 
 [[tool.basedpyright.executionEnvironments]]
 root = "src"
+extraPaths = ["tools/src"]
 
 [[tool.basedpyright.executionEnvironments]]
 root = "bench"
@@ -273,5 +280,5 @@ pythonpath = "."
 asyncio_mode = "auto"
 markers = ["slow: marks tests as slow (deselected by default)"]
 env = ["EXO_TESTS=1"]
-addopts = "-m 'not slow' --ignore=tests --ignore=tmp"
+addopts = "-m 'not slow' --import-mode=importlib --ignore=tests --ignore=tmp"
 filterwarnings = ["ignore:builtin type Swig:DeprecationWarning"]

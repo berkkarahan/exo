@@ -15,6 +15,9 @@ from typing import Any, cast
 
 import pytest
 
+pytest.importorskip("mlx.core")
+pytest.importorskip("mlx_lm")
+
 from exo.shared.constants import EXO_DEFAULT_MODELS_DIR
 from exo.shared.models.model_cards import ModelCard, ModelTask
 from exo.shared.types.backends import Backend

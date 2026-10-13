@@ -2,8 +2,12 @@
 import math
 from unittest.mock import MagicMock
 
-import mlx.core as mx
 import pytest
+
+pytest.importorskip("mlx.core")
+pytest.importorskip("mlx_lm")
+
+import mlx.core as mx
 
 from exo.worker.engines.mlx.generator.generate import extract_top_logprobs
 

@@ -11,6 +11,9 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip("mlx.core")
+pytest.importorskip("mlx_lm")
+
 from exo.download.download_utils import (
     download_file_with_retry,
     fetch_file_list_with_cache,

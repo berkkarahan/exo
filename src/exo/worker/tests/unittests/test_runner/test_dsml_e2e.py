@@ -2,6 +2,10 @@ import json
 from collections.abc import Generator
 from typing import Any, cast
 
+import pytest
+
+pytest.importorskip("mlx_lm")
+
 from exo.shared.types.common import ModelId
 from exo.shared.types.worker.runner_response import (
     GenerationResponse,

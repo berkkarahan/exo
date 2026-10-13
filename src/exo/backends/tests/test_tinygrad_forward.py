@@ -35,6 +35,7 @@ from exo.shared.types.worker.shards import PipelineShardMetadata
 
 
 def test_hidden_state_length_mismatch_is_rejected() -> None:
+    pytest.importorskip("tinygrad")
     with pytest.raises(TinygradWeightError, match="bytes"):
         hidden_state_to_tensor(
             HiddenStateBuffer(dtype="float32", shape=(2,), data=b"\x00\x00")

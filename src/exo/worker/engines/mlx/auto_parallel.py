@@ -24,7 +24,7 @@ from mlx_lm.models.deepseek_v32 import Model as DeepseekV32Model
 from mlx_lm.models.gemma4 import Model as Gemma4Model
 from mlx_lm.models.glm4_moe import Model as Glm4MoeModel
 from mlx_lm.models.glm4_moe import MoE
-from mlx_lm.models.glm4_moe_lite import Glm4MoeLiteDecoderLayer, Glm4MoeLiteMLP
+from mlx_lm.models.glm4_moe_lite import Glm4MoeLiteMLP
 from mlx_lm.models.glm4_moe_lite import Model as GLM4MoeLiteModel
 from mlx_lm.models.gpt_oss import GptOssMoeModel
 from mlx_lm.models.gpt_oss import Model as GptOssModel
@@ -945,9 +945,8 @@ class GLM4MoeLiteShardingStrategy(TensorParallelShardingStrategy):
         model: nn.Module,
     ) -> Generator[ModelLoadingResponse, None, nn.Module]:
         model = cast(GLM4MoeLiteModel, model)
-        total = len(model.layers)  # type: ignore
-        for i, layer in enumerate(model.layers):  # type: ignore
-            layer = cast(Glm4MoeLiteDecoderLayer, layer)
+        total = len(model.layers)
+        for i, layer in enumerate(model.layers):
             mx.eval(layer.parameters())
             if layer.self_attn.q_lora_rank is None:  # type: ignore
                 layer.self_attn.q_proj = self.all_to_sharded_linear(
@@ -992,7 +991,7 @@ class GLM4MoeLiteShardingStrategy(TensorParallelShardingStrategy):
                 self.sharded_to_all_linear_in_place(layer.mlp.switch_mlp.down_proj)
                 self.all_to_sharded_linear_in_place(layer.mlp.switch_mlp.up_proj)
                 layer.mlp = ShardedMoE(layer.mlp)  # type: ignore
-                layer.mlp.sharding_group = self.group  # type: ignore
+                layer.mlp.sharding_group = self.group
             mx.eval(layer)
             mx.clear_cache()
 

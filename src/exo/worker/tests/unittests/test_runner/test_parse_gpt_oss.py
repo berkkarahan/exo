@@ -1,5 +1,9 @@
 from collections.abc import Generator
 
+import pytest
+
+pytest.importorskip("mlx_lm")
+
 from exo.api.types import (
     CompletionTokensDetails,
     FinishReason,

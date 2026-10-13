@@ -389,7 +389,7 @@ async def _gather_iface_map() -> dict[str, str] | None:
 
 def _has_nvml_cuda() -> bool:
     try:
-        import pynvml as nvml  # pyright: ignore[reportMissingModuleSource]
+        import pynvml as nvml
     except ImportError:
         return False
     try:

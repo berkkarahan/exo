@@ -12,6 +12,9 @@ import traceback
 import numpy as np
 import pytest
 
+pytest.importorskip("mlx.core")
+pytest.importorskip("mlx_lm")
+
 MODEL_CONFIGS = {
     "llama": dict(
         module="mlx_lm.models.llama",

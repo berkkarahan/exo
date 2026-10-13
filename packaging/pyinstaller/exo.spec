@@ -1,11 +1,12 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-import sys
 import importlib.util
 import shutil
+import sys
+from importlib import metadata
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 PROJECT_ROOT = Path.cwd()
 SOURCE_ROOT = PROJECT_ROOT / "src"
@@ -52,6 +53,7 @@ def _safe_collect(package_name: str) -> list[str]:
 HIDDEN_IMPORTS = sorted(
     set(
         _safe_collect("transformers")
+        + _safe_collect("torch")
         + _safe_collect("tinygrad")
         + _safe_collect("pyopencl")
         + _safe_collect("exo_rs")
@@ -65,6 +67,23 @@ DATAS: list[tuple[str, str]] = [
 ]
 
 BINARIES: list[tuple[str, str]] = []
+
+if sys.platform == "win32":
+    # ROCm's Python wheels ship their runtime DLLs as package data, outside the
+    # torch package. Include those DLLs in the frozen Windows AMD build.
+    rocm_packages = {
+        package_name
+        for distribution in metadata.distributions()
+        if (distribution.metadata.get("Name") or "").lower().startswith("rocm-sdk-")
+        for package_name in (distribution.read_text("top_level.txt") or "").split()
+    }
+    for package_name in sorted(rocm_packages):
+        package_datas, package_binaries, package_hidden_imports = collect_all(
+            package_name
+        )
+        DATAS.extend(package_datas)
+        BINARIES.extend(package_binaries)
+        HIDDEN_IMPORTS = sorted(set(HIDDEN_IMPORTS + package_hidden_imports))
 
 if sys.platform == "win32":
     HIDDEN_IMPORTS = sorted(set(HIDDEN_IMPORTS + ["tkinter", "tkinter.ttk"]))

@@ -1,5 +1,10 @@
 import io
 
+import pytest
+
+pytest.importorskip("mlx.core")
+pytest.importorskip("mlx_lm")
+
 import mlx.core as mx
 import numpy as np
 from mlx_lm.models.cache import ArraysCache, KVCache, RotatingKVCache

@@ -6,8 +6,12 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, cast
 
-import mlx.core as mx
 import pytest
+
+pytest.importorskip("mlx.core")
+pytest.importorskip("mlx_lm")
+
+import mlx.core as mx
 from mlx_lm.models.cache import KVCache
 
 import exo.worker.engines.mlx.disaggregated.serve as mlx_serve_mod

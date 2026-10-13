@@ -5,9 +5,13 @@ import queue
 import threading
 from typing import BinaryIO
 
+import pytest
+
+pytest.importorskip("mlx.core")
+pytest.importorskip("mlx_lm")
+
 import mlx.core as mx
 import numpy as np
-import pytest
 from mlx_lm.models.cache import KVCache
 
 from exo.utils.ports import random_ephemeral_port

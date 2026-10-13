@@ -2,11 +2,17 @@ import json
 import multiprocessing as mp
 import os
 import tempfile
+from multiprocessing.process import BaseProcess
+from queue import Empty
 from typing import Any
+
+import pytest
+
+pytest.importorskip("mlx.core")
+pytest.importorskip("mlx_lm")
 
 import mlx.core as mx
 import mlx.nn as mlx_nn
-import pytest
 
 from exo.worker.engines.mlx.auto_parallel import (
     CustomMlxLayer,
@@ -14,7 +20,7 @@ from exo.worker.engines.mlx.auto_parallel import (
     PipelineLastLayer,
     patch_pipeline_model,
 )
-from exo.worker.tests.unittests.test_mlx.conftest import MockLayer
+from exo.worker.tests.unittests.test_mlx.mlx_test_utils import MockLayer
 
 
 def run_pipeline_device(
@@ -61,7 +67,7 @@ def run_pipeline_device(
         result = model(x)
         mx.eval(result)
         success = result.shape == x.shape
-        result_queue.put((rank, success, result))  # pyright: ignore[reportAny]
+        result_queue.put((rank, success, result.tolist()))  # pyright: ignore[reportAny]
     except Exception as e:
         result_queue.put((rank, False, str(e)))  # pyright: ignore[reportAny]
 
@@ -105,10 +111,9 @@ def test_composed_call_works() -> None:
         json.dump(hosts, f)
         hostfile_path = f.name
 
+    result_queue: Any = ctx.Queue()
+    processes: list[BaseProcess] = []
     try:
-        result_queue: Any = ctx.Queue()
-
-        processes: list[Any] = []
         for rank in range(world_size):
             p = ctx.Process(
                 target=run_pipeline_device,
@@ -117,17 +122,24 @@ def test_composed_call_works() -> None:
             p.start()
             processes.append(p)
 
-        for p in processes:  # pyright: ignore[reportAny]
-            p.join(timeout=10)  # pyright: ignore[reportAny]
-
         results: dict[int, Any] = {}
         errors: dict[int, str] = {}
-        while not result_queue.empty():  # pyright: ignore[reportAny]
-            rank, success, value = result_queue.get()  # pyright: ignore[reportAny]
+        for _ in processes:
+            try:
+                rank, success, value = result_queue.get(timeout=30)  # pyright: ignore[reportAny]
+            except Empty:
+                pytest.fail(
+                    f"Timed out waiting for MLX ranks: "
+                    f"{[(p.pid, p.exitcode) for p in processes]}"
+                )
             if success:
                 results[rank] = value
             else:
                 errors[rank] = value
+
+        for p in processes:
+            p.join(timeout=5)
+        assert all(p.exitcode == 0 for p in processes)
 
         assert len(results) == world_size, (
             f"Expected {world_size} results, got {len(results)}. Errors: {errors}"
@@ -139,8 +151,14 @@ def test_composed_call_works() -> None:
             )
             result_array = results[rank]
             # Both devices see the final result (4.0) after all_gather
-            assert (result_array == 4.0).all(), (
+            assert result_array == [[4.0] * 4], (
                 f"Device {rank}: expected 4.0, got {result_array}"
             )
     finally:
+        for p in processes:
+            if p.is_alive():
+                p.terminate()
+            p.join(timeout=5)
+        result_queue.close()  # pyright: ignore[reportAny]
+        result_queue.join_thread()  # pyright: ignore[reportAny]
         os.unlink(hostfile_path)

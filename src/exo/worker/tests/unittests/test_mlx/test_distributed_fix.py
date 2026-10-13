@@ -5,7 +5,10 @@ from typing import Any, Callable
 
 import pytest
 
-from exo.worker.tests.unittests.test_mlx.conftest import (
+pytest.importorskip("mlx.core")
+pytest.importorskip("mlx_lm")
+
+from exo.worker.tests.unittests.test_mlx.mlx_test_utils import (
     DEFAULT_GPT_OSS_CONFIG,
     create_hostfile,
     run_gpt_oss_pipeline_device,
