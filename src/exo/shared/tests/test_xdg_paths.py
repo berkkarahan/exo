@@ -78,7 +78,7 @@ def test_legacy_exo_home_takes_precedence():
 
 
 def test_macos_uses_traditional_paths():
-    """Test that macOS uses traditional ~/.exo directory."""
+    """Test that macOS uses traditional ~/.wexo directory."""
     # Remove EXO_HOME to ensure we test the default behavior
     env = {k: v for k, v in os.environ.items() if k != "EXO_HOME"}
     with (
@@ -92,9 +92,9 @@ def test_macos_uses_traditional_paths():
         importlib.reload(constants)
 
         home = Path.home()
-        assert home / ".exo" == constants.EXO_CONFIG_HOME
-        assert home / ".exo" == constants.EXO_DATA_HOME
-        assert home / ".exo" == constants.EXO_CACHE_HOME
+        assert home / ".wexo" == constants.EXO_CONFIG_HOME
+        assert home / ".wexo" == constants.EXO_DATA_HOME
+        assert home / ".wexo" == constants.EXO_CACHE_HOME
 
 
 def test_models_in_data_dir():

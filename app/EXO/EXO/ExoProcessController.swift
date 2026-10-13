@@ -53,7 +53,7 @@ final class ExoProcessController: ObservableObject {
     }
 
     static let exoDirectoryURL: URL = {
-        URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".exo")
+        URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".wexo")
     }()
 
     @Published private(set) var status: Status = .stopped
@@ -190,7 +190,7 @@ final class ExoProcessController: ObservableObject {
             let runtimeURL = try resolveRuntimeDirectory()
             runtimeDirectoryURL = runtimeURL
 
-            let executableURL = runtimeURL.appendingPathComponent("exo")
+            let executableURL = runtimeURL.appendingPathComponent("wexo")
 
             let child = Process()
             child.executableURL = executableURL
@@ -350,14 +350,14 @@ final class ExoProcessController: ObservableObject {
         }
 
         if let resourceRoot = Bundle.main.resourceURL {
-            let bundled = resourceRoot.appendingPathComponent("exo", isDirectory: true)
+            let bundled = resourceRoot.appendingPathComponent("wexo", isDirectory: true)
             if fileManager.fileExists(atPath: bundled.path) {
                 return bundled
             }
         }
 
         let repoCandidate = URL(fileURLWithPath: fileManager.currentDirectoryPath)
-            .appendingPathComponent("dist/exo", isDirectory: true)
+            .appendingPathComponent("dist/wexo", isDirectory: true)
         if fileManager.fileExists(atPath: repoCandidate.path) {
             return repoCandidate
         }
@@ -368,6 +368,7 @@ final class ExoProcessController: ObservableObject {
     private func makeEnvironment(for runtimeURL: URL) -> [String: String] {
         var environment = ProcessInfo.processInfo.environment
         environment["EXO_RUNTIME_DIR"] = runtimeURL.path
+        environment["EXO_HOME"] = ".wexo"
         environment["EXO_ZENOH_NAMESPACE"] = computeNamespace()
         if !hfToken.isEmpty {
             environment["HF_TOKEN"] = hfToken
@@ -452,9 +453,8 @@ final class ExoProcessController: ObservableObject {
     }
 
     private func computeNamespace() -> String {
-        let base = buildTag()
         let custom = customNamespace.trimmingCharacters(in: .whitespaces)
-        return custom.isEmpty ? base : custom
+        return custom.isEmpty ? "wEXO" : custom
     }
 }
 

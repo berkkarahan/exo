@@ -42,7 +42,7 @@
     {#each items as toast (toast.id)}
       {@const style = typeStyles[toast.type]}
       <div
-        class="pointer-events-auto max-w-sm w-80 bg-exo-dark-gray/95 backdrop-blur-sm border border-exo-medium-gray/60 border-l-[3px] {style.border} rounded shadow-lg shadow-black/40"
+        class="pointer-events-auto max-w-sm w-80 bg-wEXO-dark-gray/95 backdrop-blur-sm border border-wEXO-medium-gray/60 border-l-[3px] {style.border} rounded shadow-lg shadow-black/40"
         in:fly={{ x: 80, duration: 250 }}
         out:fade={{ duration: 150 }}
         animate:flip={{ duration: 200 }}

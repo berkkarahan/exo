@@ -1,9 +1,9 @@
 /**
- * AppStore - Central state management for the EXO dashboard
+ * AppStore - Central state management for the wEXO dashboard
  *
  * Manages:
  * - Chat state (whether a conversation has started)
- * - Topology data from the EXO server
+ * - Topology data from the wEXO server
  * - UI state for the topology/chat transition
  */
 
@@ -337,8 +337,8 @@ export interface Conversation {
   enableThinking: boolean | null;
 }
 
-const STORAGE_KEY = "exo-conversations";
-const IMAGE_PARAMS_STORAGE_KEY = "exo-image-generation-params";
+const STORAGE_KEY = "wEXO-conversations";
+const IMAGE_PARAMS_STORAGE_KEY = "wEXO-image-generation-params";
 
 // Image generation params interface matching backend API
 export interface ImageGenerationParams {
@@ -696,7 +696,7 @@ class AppStore {
 
   private loadDebugModeFromStorage() {
     try {
-      const stored = localStorage.getItem("exo-debug-mode");
+      const stored = localStorage.getItem("wEXO-debug-mode");
       if (stored !== null) {
         this.debugMode = stored === "true";
       }
@@ -707,7 +707,10 @@ class AppStore {
 
   private saveDebugModeToStorage() {
     try {
-      localStorage.setItem("exo-debug-mode", this.debugMode ? "true" : "false");
+      localStorage.setItem(
+        "wEXO-debug-mode",
+        this.debugMode ? "true" : "false",
+      );
     } catch (error) {
       console.error("Failed to save debug mode:", error);
     }
@@ -715,7 +718,7 @@ class AppStore {
 
   private loadTopologyOnlyModeFromStorage() {
     try {
-      const stored = localStorage.getItem("exo-topology-only-mode");
+      const stored = localStorage.getItem("wEXO-topology-only-mode");
       if (stored !== null) {
         this.topologyOnlyMode = stored === "true";
       }
@@ -727,7 +730,7 @@ class AppStore {
   private saveTopologyOnlyModeToStorage() {
     try {
       localStorage.setItem(
-        "exo-topology-only-mode",
+        "wEXO-topology-only-mode",
         this.topologyOnlyMode ? "true" : "false",
       );
     } catch (error) {
@@ -737,7 +740,7 @@ class AppStore {
 
   private loadChatSidebarVisibleFromStorage() {
     try {
-      const stored = localStorage.getItem("exo-chat-sidebar-visible");
+      const stored = localStorage.getItem("wEXO-chat-sidebar-visible");
       if (stored !== null) {
         this.chatSidebarVisible = stored === "true";
       }
@@ -749,7 +752,7 @@ class AppStore {
   private saveChatSidebarVisibleToStorage() {
     try {
       localStorage.setItem(
-        "exo-chat-sidebar-visible",
+        "wEXO-chat-sidebar-visible",
         this.chatSidebarVisible ? "true" : "false",
       );
     } catch (error) {

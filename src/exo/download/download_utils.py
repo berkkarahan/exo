@@ -171,8 +171,14 @@ def is_read_only_model_dir(model_dir: Path) -> bool:
     return any(model_dir.is_relative_to(d) for d in EXO_MODELS_READ_ONLY_DIRS)
 
 
-def build_model_path(model_id: ModelId) -> Path:
-    found = resolve_existing_model(model_id)
+def build_model_path(model_id: ModelId, card: ModelCard | None = None) -> Path:
+    """Return the on-disk directory for ``model_id``.
+
+    Passing ``card`` lets a GGUF checkpoint be found, because completeness for
+    a GGUF directory is decided by the card's ``gguf_filename`` rather than by
+    a safetensors index.
+    """
+    found = resolve_existing_model(model_id, card)
     if found is not None:
         return found
     return EXO_DEFAULT_MODELS_DIR / model_id.normalize()
@@ -335,10 +341,49 @@ def _scan_model_directory(
     return list(entries_by_path.values())
 
 
+def _scan_gguf_directory(model_dir: Path) -> list[FileListEntry] | None:
+    """Scan a local model directory for GGUF weights.
+
+    Returns one entry per ``*.gguf`` file plus any ``config.json`` sidecar, or
+    ``None`` when the directory holds no GGUF file. Used by offline discovery
+    so a locally downloaded GGUF model is recognized without a safetensors
+    index.
+    """
+    entries: list[FileListEntry] = []
+    for gguf_path in sorted(model_dir.glob("*.gguf")):
+        if gguf_path.name.endswith(".partial"):
+            continue
+        entries.append(
+            FileListEntry(
+                type="file",
+                path=gguf_path.name,
+                size=gguf_path.stat().st_size,
+            )
+        )
+    if not entries:
+        return None
+    config_path = model_dir / "config.json"
+    if config_path.is_file():
+        entries.append(
+            FileListEntry(
+                type="file",
+                path=config_path.name,
+                size=config_path.stat().st_size,
+            )
+        )
+    return entries
+
+
 def is_model_directory_complete(model_dir: Path, card: ModelCard | None = None) -> bool:
     """Check if a model directory contains all required weight files.
     Also checks for sibling weights repo.
     """
+    if card is not None and card.gguf_filename is not None:
+        # A GGUF checkpoint is complete once the card's file is present. The
+        # GGUF header carries the tokenizer and architecture, so sidecars are
+        # optional for the tinygrad backend.
+        gguf_path = model_dir / card.gguf_filename
+        return gguf_path.is_file() and gguf_path.stat().st_size > 0
     file_list = _scan_model_directory(model_dir, recursive=True)
     if file_list is None or not all(f.size is not None for f in file_list):
         return False
@@ -365,7 +410,8 @@ async def _build_file_list_from_local_directory(
 
     We can only figure out the files we need from safetensors index, so
     a local directory must contain a *.safetensors.index.json and
-    safetensors listed there.
+    safetensors listed there. A GGUF-only directory falls back to the local
+    ``*.gguf`` files so offline mode still recognizes it.
     """
     normalized = model_id.normalize()
     for search_dir in (*EXO_MODELS_READ_ONLY_DIRS, *EXO_MODELS_DIRS):
@@ -376,6 +422,9 @@ async def _build_file_list_from_local_directory(
             )
             if file_list:
                 return file_list
+            gguf_file_list = await asyncio.to_thread(_scan_gguf_directory, model_dir)
+            if gguf_file_list:
+                return gguf_file_list
     return None
 
 

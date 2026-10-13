@@ -16,7 +16,7 @@ final class ClusterStateService: ObservableObject {
     private let endpoint: URL
 
     init(
-        baseURL: URL = URL(string: "http://127.0.0.1:52415")!,
+        baseURL: URL = URL(string: "http://127.0.0.1:52416")!,
         session: URLSession = ClusterStateService.makeNonCachingSession()
     ) {
         self.baseURL = baseURL

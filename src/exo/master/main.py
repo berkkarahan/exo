@@ -41,6 +41,7 @@ from exo.shared.types.events import (
     CustomModelCardAdded,
     CustomModelCardDeleted,
     Event,
+    EventId,
     GlobalForwarderEvent,
     IndexedEvent,
     InputChunkReceived,
@@ -150,6 +151,8 @@ class Master:
     async def run(self):
         logger.info("Starting Master")
 
+        await self._replay_durable_events()
+
         try:
             async with self._tg as tg:
                 tg.start_soon(self._event_processor)
@@ -163,6 +166,44 @@ class Master:
             self.global_event_sender.close()
             self.local_event_receiver.close()
             self.command_receiver.close()
+
+    async def _replay_durable_events(self) -> None:
+        """Re-apply durable events persisted by previous sessions.
+
+        The event log is the durable record of custom model cards and instance
+        links, which are not otherwise persisted. Ephemeral events (instances,
+        runners, tasks, downloads, topology, gathered info) are deliberately
+        skipped: they are rebuilt live after a restart, and replaying them
+        would restore stale entries that no longer match the cluster. Replay
+        re-indexes each event into the fresh log and re-broadcasts it so the
+        worker and API recover the same state.
+
+        Events are de-duplicated by ``event_id`` because replayed events are
+        re-appended to the log and would otherwise accumulate across restarts.
+        """
+        seen: set[EventId] = set()
+        replayed = 0
+        for event in self._event_log.iter_persisted():
+            if not isinstance(
+                event,
+                (
+                    CustomModelCardAdded,
+                    CustomModelCardDeleted,
+                    InstanceLinkCreated,
+                    InstanceLinkDeleted,
+                ),
+            ):
+                continue
+            if event.event_id in seen:
+                continue
+            seen.add(event.event_id)
+            indexed = IndexedEvent(event=event, idx=len(self._event_log))
+            self.state = apply(self.state, indexed)
+            self._event_log.append(event)
+            await self._send_indexed_event(indexed)
+            replayed += 1
+        if replayed:
+            logger.info(f"Master replayed {replayed} durable events after restart")
 
     async def shutdown(self):
         logger.info("Stopping Master")

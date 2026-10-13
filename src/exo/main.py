@@ -12,7 +12,6 @@ from loguru import logger
 from pydantic import PositiveInt
 
 import exo.routing.topics as topics
-from exo import __version__
 from exo.api.main import API
 from exo.download.coordinator import DownloadCoordinator
 from exo.download.impl_shard_downloader import exo_shard_downloader
@@ -404,7 +403,7 @@ class Args(FrozenModel):
     verbosity: int = 0
     force_master: bool = False
     spawn_api: bool = False
-    api_port: PositiveInt = 52415
+    api_port: PositiveInt = 52416
     tb_only: bool = False
     no_worker: bool = False
     no_downloads: bool = False
@@ -451,7 +450,7 @@ class Args(FrozenModel):
             "--api-port",
             type=int,
             dest="api_port",
-            default=52415,
+            default=52416,
         )
         parser.add_argument(
             "--no-worker",
@@ -490,21 +489,21 @@ class Args(FrozenModel):
         parser.add_argument(
             "--namespace",
             type=str,
-            default=__version__,
+            default=os.getenv("EXO_ZENOH_NAMESPACE") or "wEXO",
             dest="namespace",
             help="Discovery namespace, nodes with different namespaces will not connect.",
         )
         parser.add_argument(
             "--zenoh-port",
             type=int,
-            default=52414,
+            default=52417,
             dest="zenoh_port",
             help="Fixed TCP port for zenoh to listen.",
         )
         parser.add_argument(
             "--discovery-port",
             type=int,
-            default=52413,
+            default=52418,
             dest="discovery_port",
             help="Fixed UDP port for the discovery service.",
         )

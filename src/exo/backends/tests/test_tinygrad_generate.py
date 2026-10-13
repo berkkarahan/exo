@@ -579,7 +579,9 @@ def _loaded_engine(
         include_output=include_output,
     )
 
-    def use_temporary_directory(model_id: ModelId) -> Path:
+    def use_temporary_directory(
+        model_id: ModelId, card: ModelCard | None = None
+    ) -> Path:
         _ = model_id
         return tmp_path
 
@@ -908,7 +910,9 @@ def _loaded_pipeline(
         include_output=True,
     )
 
-    def use_temporary_directory(model_id: ModelId) -> Path:
+    def use_temporary_directory(
+        model_id: ModelId, card: ModelCard | None = None
+    ) -> Path:
         _ = model_id
         return tmp_path
 

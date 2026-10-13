@@ -1,5 +1,6 @@
 import hashlib
 from collections import defaultdict
+from collections.abc import Sequence
 from datetime import datetime, timezone
 
 import anyio
@@ -12,9 +13,14 @@ from exo.routing.event_router import (
     EventRouterBrokenResourceError,
     EventRouterClosedResourceError,
 )
-from exo.shared.apply import apply
+from exo.shared.apply import apply, apply_custom_model_card_added
 from exo.shared.constants import EXO_MAX_INSTANCE_RETRIES
-from exo.shared.models.model_cards import ModelId, card_cache
+from exo.shared.models.model_cards import (
+    ModelCard,
+    ModelId,
+    card_cache,
+    load_persisted_custom_cards,
+)
 from exo.shared.types.chunks import InputImageChunk
 from exo.shared.types.commands import (
     DeleteInstance,
@@ -24,6 +30,7 @@ from exo.shared.types.commands import (
 )
 from exo.shared.types.common import CommandId, NodeId, SystemId
 from exo.shared.types.events import (
+    CustomModelCardAdded,
     Event,
     IndexedEvent,
     InputChunkReceived,
@@ -60,6 +67,22 @@ from exo.utils.keyed_backoff import KeyedBackoff
 from exo.utils.task_group import TaskGroup
 from exo.worker.plan import plan
 from exo.worker.runner.supervisor import RunnerSupervisor
+
+
+def with_persisted_custom_cards(state: State, cards: Sequence[ModelCard]) -> State:
+    """Return ``state`` with any durable custom cards it does not already have.
+
+    The master replays durable events from the event log on restart, but the
+    worker can run its custom-card reconciliation before those events arrive.
+    Seeding from the durable TOML store keeps the reconciliation from deleting
+    cards that survived the restart.
+    """
+    for card in cards:
+        if card.is_custom and card.model_id not in state.custom_model_cards:
+            state = apply_custom_model_card_added(
+                CustomModelCardAdded(model_card=card), state
+            )
+    return state
 
 
 class Worker:
@@ -178,6 +201,11 @@ class Worker:
                             ] = img
 
     async def _reconcile_custom_cards(self) -> None:
+        # Seed state from the durable TOML store before reconciling. The
+        # master replays durable events from the event log, but the worker may
+        # not have applied them yet, and an empty state here would make the
+        # deletion sweep below remove cards that were persisted across restarts.
+        await self._hydrate_custom_cards()
         while True:
             await anyio.sleep(1)
             target = dict(self.state.custom_model_cards)
@@ -189,6 +217,16 @@ class Worker:
             for card in await card_cache.list_all():
                 if card.model_id not in target:
                     await card_cache.pop(card.model_id)
+
+    async def _hydrate_custom_cards(self) -> None:
+        """Merge the durable TOML custom cards into this worker's state.
+
+        ``self.state`` is read only after the await: capturing it beforehand
+        would discard any events ``_event_applier`` applies while the load
+        runs, resetting ``last_event_applied_idx``.
+        """
+        persisted = await load_persisted_custom_cards()
+        self.state = with_persisted_custom_cards(self.state, persisted)
 
     async def plan_step(self):
         while True:

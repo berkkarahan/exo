@@ -41,9 +41,9 @@ from exo.windows.launcher import (
 )
 from exo.windows.taskbar import TaskbarIcon
 
-DASHBOARD_URL = "http://localhost:52415/"
-API_BASE_URL = "http://localhost:52415/v1"
-ONBOARDING_RESET_URL = "http://localhost:52415/?reset-onboarding"
+DASHBOARD_URL = "http://localhost:52416/"
+API_BASE_URL = "http://localhost:52416/v1"
+ONBOARDING_RESET_URL = "http://localhost:52416/?reset-onboarding"
 _ERROR_ALREADY_EXISTS = 183
 
 

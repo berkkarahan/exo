@@ -3,8 +3,9 @@ import json
 from collections import OrderedDict
 from collections.abc import Iterator
 from datetime import datetime, timezone
-from io import BufferedRandom, BufferedReader
+from io import BufferedRandom, BufferedReader, BytesIO
 from pathlib import Path
+from typing import Protocol
 
 import msgspec
 import zstandard
@@ -15,9 +16,19 @@ from exo.shared.types.events import Event
 
 _EVENT_ADAPTER: TypeAdapter[Event] = TypeAdapter(Event)
 
+
+class _BinaryReader(Protocol):
+    """Minimal reader interface shared by files and decompression streams."""
+
+    def read(self, count: int = -1, /) -> bytes: ...
+
+
 _HEADER_SIZE = 4  # uint32 big-endian
 _OFFSET_CACHE_SIZE = 128
-_MAX_ARCHIVES = 5
+# Durable events (custom model cards, instance links) are replayed from these
+# archives on restart, so keep enough history to recover user configuration
+# across many restarts rather than only the last few sessions.
+_MAX_ARCHIVES = 50
 
 
 def _serialize_event(event: Event) -> bytes:
@@ -47,7 +58,7 @@ def _skip_record(f: BufferedReader) -> bool:
     return True
 
 
-def _read_record(f: BufferedReader) -> Event | None:
+def _read_record(f: _BinaryReader) -> Event | None:
     """Read one length-prefixed record. Returns None on EOF."""
     header = f.read(_HEADER_SIZE)
     if len(header) < _HEADER_SIZE:
@@ -57,6 +68,14 @@ def _read_record(f: BufferedReader) -> Event | None:
     if len(payload) < length:
         return None
     return _deserialize_event(payload)
+
+
+def _read_zstd_archive(path: Path) -> Iterator[Event]:
+    """Yield every event stored in one compressed archive, oldest first."""
+    decompressor = zstandard.ZstdDecompressor()
+    with path.open("rb") as raw, decompressor.stream_reader(raw) as stream:
+        while (event := _read_record(stream)) is not None:
+            yield event
 
 
 class DiskEventLog:
@@ -145,6 +164,28 @@ class DiskEventLog:
                 event = _read_record(f)
                 if event is None:
                     break
+                yield event
+
+    def iter_persisted(self) -> Iterator[Event]:
+        """Yield every persisted event in chronological order.
+
+        Reads rotated ``events.*.bin.zst`` archives oldest-first, then the
+        active ``events.bin``. The master uses this on startup to replay
+        durable events (custom model cards, instance links) that are not
+        otherwise persisted.
+
+        The active file's bytes are snapshotted up front: replay appends to
+        the active log as it iterates, and reading the file lazily would see
+        those appends and loop forever.
+        """
+        self._file.flush()
+        active_bytes = self._active_path.read_bytes() if self._count > 0 else b""
+        for archive in sorted(self._directory.glob("events.*.bin.zst")):
+            yield from _read_zstd_archive(archive)
+        if not active_bytes:
+            return
+        with BytesIO(active_bytes) as buffer:
+            while (event := _read_record(buffer)) is not None:
                 yield event
 
     def __len__(self) -> int:

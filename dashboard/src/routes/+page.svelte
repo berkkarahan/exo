@@ -269,7 +269,7 @@
   let pendingFirefoxQuery = $state<string | null>(null); // ?q= param deferred until state loads
 
   // ── Onboarding wizard state ──
-  const ONBOARDING_COMPLETE_KEY = "exo-onboarding-complete";
+  const ONBOARDING_COMPLETE_KEY = "wEXO-onboarding-complete";
   let onboardingStep = $state(0); // 0 = not in onboarding, 1-9 = wizard steps
   let onboardingModelId = $state<string | null>(null); // model selected during onboarding
   let onboardingFadingOut = $state(false); // true during fade-out transition
@@ -360,7 +360,7 @@
   const titleOpacity = tweened(0, { duration: 500, easing: cubicOut });
   const subtitleOpacity = tweened(0, { duration: 500, easing: cubicOut });
 
-  // ── Step 1: "Your EXO Network" — show real topology ──
+  // ── Step 1: "Your wEXO Network" — show real topology ──
   $effect(() => {
     if (onboardingStep === 1) {
       showContinueButton = false;
@@ -459,7 +459,7 @@
     }
   });
 
-  // ── Step 3: "exo splits the model" — model block appears, splits ──
+  // ── Step 3: "wEXO splits the model" — model block appears, splits ──
   $effect(() => {
     if (onboardingStep === 3) {
       showContinueButton = false;
@@ -470,7 +470,7 @@
       titleOpacity.set(0, { duration: 250 });
       subtitleOpacity.set(0, { duration: 250 });
       setTimeout(() => {
-        stepTitle = "exo splits models across devices";
+        stepTitle = "wEXO splits models across devices";
         titleOpacity.set(1, { duration: 400 });
         subtitleOpacity.set(1, { duration: 400 });
       }, 250);
@@ -495,7 +495,7 @@
     }
   });
 
-  // ── Step 4: "A device disconnects... exo self-heals" — full disconnect+heal sequence ──
+  // ── Step 4: "A device disconnects... wEXO self-heals" — full disconnect+heal sequence ──
   $effect(() => {
     if (onboardingStep === 4) {
       showContinueButton = false;
@@ -529,7 +529,7 @@
         subtitleOpacity.set(0, { duration: 250 });
       }, 2550);
       const t4b = setTimeout(() => {
-        stepTitle = "exo self-heals";
+        stepTitle = "wEXO self-heals";
         titleOpacity.set(1, { duration: 400 });
         subtitleOpacity.set(1, { duration: 400 });
       }, 2800);
@@ -675,7 +675,7 @@
     } catch {
       // ignore
     }
-    // Persist to server (~/.exo)
+    // Persist to server (~/.wexo)
     fetch("/onboarding", { method: "POST" }).catch(() => {});
     // Remove overlay after fade-out transition completes
     setTimeout(() => {
@@ -915,7 +915,7 @@
   }
 
   // Launch defaults persistence
-  const LAUNCH_DEFAULTS_KEY = "exo-launch-defaults-v2";
+  const LAUNCH_DEFAULTS_KEY = "wEXO-launch-defaults-v2";
   interface LaunchDefaults {
     modelId: string | null;
     sharding: "Pipeline" | "Tensor";
@@ -958,7 +958,8 @@
     // Apply sharding and instance type unconditionally
     selectedSharding = defaults.sharding;
     selectedInstanceType =
-      defaults.instanceType === "Tinygrad" || defaults.instanceType === "MlxRing"
+      defaults.instanceType === "Tinygrad" ||
+      defaults.instanceType === "MlxRing"
         ? defaults.instanceType
         : "MlxJaccl";
     if (clusterHasOnlyTinygradBackends()) {
@@ -1373,7 +1374,7 @@
       pendingFirefoxQuery = queryParam;
     }
 
-    // Check server-side onboarding state (persisted in ~/.exo)
+    // Check server-side onboarding state (persisted in ~/.wexo)
     try {
       const res = await fetch("/onboarding");
       if (res.ok) {
@@ -1921,7 +1922,7 @@
       case "LOADED":
         return "text-green-400";
       default:
-        return "text-exo-light-gray";
+        return "text-wEXO-light-gray";
     }
   }
 
@@ -2389,10 +2390,7 @@
       instanceTag === "TinygradInstance"
     ) {
       const record = instance as Record<string, unknown>;
-      const ordered = getOrderedRunnerNodes(
-        record,
-        instanceShardType(record),
-      );
+      const ordered = getOrderedRunnerNodes(record, instanceShardType(record));
       const hostsByNode =
         (
           instance as {
@@ -3374,7 +3372,7 @@
 
           <!-- Tooltip on hover -->
           <div
-            class="absolute top-full left-0 mt-2 w-80 p-3 rounded border border-yellow-500/30 bg-exo-dark-gray/95 backdrop-blur-sm opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 shadow-lg"
+            class="absolute top-full left-0 mt-2 w-80 p-3 rounded border border-yellow-500/30 bg-wEXO-dark-gray/95 backdrop-blur-sm opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 shadow-lg"
           >
             <p class="text-xs text-white/80 mb-2">
               A network routing cycle was detected between nodes connected via
@@ -3391,12 +3389,12 @@
             <button
               type="button"
               onclick={() => copyToClipboard(disableCmd)}
-              class="w-full flex items-center gap-2 text-[10px] font-mono bg-exo-black/60 px-2 py-1.5 rounded text-exo-yellow break-all text-left hover:bg-exo-black/80 transition-colors cursor-pointer group/copy"
+              class="w-full flex items-center gap-2 text-[10px] font-mono bg-wEXO-black/60 px-2 py-1.5 rounded text-wEXO-yellow break-all text-left hover:bg-wEXO-black/80 transition-colors cursor-pointer group/copy"
               title="Click to copy"
             >
               <span class="flex-1">{disableCmd}</span>
               <svg
-                class="w-3.5 h-3.5 flex-shrink-0 text-white/40 group-hover/copy:text-exo-yellow transition-colors"
+                class="w-3.5 h-3.5 flex-shrink-0 text-white/40 group-hover/copy:text-wEXO-yellow transition-colors"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -3446,7 +3444,7 @@
 
           <!-- Tooltip on hover -->
           <div
-            class="absolute top-full left-0 mt-2 w-80 p-3 rounded border border-yellow-500/30 bg-exo-dark-gray/95 backdrop-blur-sm opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 shadow-lg"
+            class="absolute top-full left-0 mt-2 w-80 p-3 rounded border border-yellow-500/30 bg-wEXO-dark-gray/95 backdrop-blur-sm opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 shadow-lg"
           >
             <p class="text-xs text-white/80 mb-2">
               Nodes in this cluster are running different macOS versions. This
@@ -3512,7 +3510,7 @@
           </div>
           <!-- Tooltip on hover -->
           <div
-            class="absolute top-full left-0 mt-2 w-80 p-3 rounded border border-yellow-500/30 bg-exo-dark-gray/95 backdrop-blur-sm opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 shadow-lg"
+            class="absolute top-full left-0 mt-2 w-80 p-3 rounded border border-yellow-500/30 bg-wEXO-dark-gray/95 backdrop-blur-sm opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 shadow-lg"
           >
             <p class="text-xs text-white/80 mb-2">
               Thunderbolt 5 hardware detected on multiple nodes. Enable RDMA for
@@ -3906,7 +3904,7 @@
 />
 
 <div
-  class="relative h-screen w-full flex flex-col bg-exo-dark-gray overflow-hidden"
+  class="relative h-screen w-full flex flex-col bg-wEXO-dark-gray overflow-hidden"
 >
   <!-- Scanline overlay -->
   <!-- Scanline overlay -->
@@ -3943,7 +3941,7 @@
     <!-- FULL-SCREEN ONBOARDING WIZARD (overlay)                -->
     <!-- ═══════════════════════════════════════════════════════ -->
     <div
-      class="absolute inset-0 flex items-center justify-center z-30 bg-exo-black"
+      class="absolute inset-0 flex items-center justify-center z-30 bg-wEXO-black"
       style="transition: opacity 0.45s cubic-bezier(0.4, 0, 0.2, 1); opacity: {onboardingFadingOut
         ? 0
         : 1};"
@@ -3963,7 +3961,7 @@
               style="opacity: {$logoOpacity}; max-height: {$logoOpacity *
                 80}px; overflow: hidden; transition: max-height 0.6s cubic-bezier(0.4, 0, 0.2, 1);"
             >
-              <img src="/exo-logo.png" alt="exo" class="w-36 mx-auto mb-10" />
+              <img src="/wEXO-logo.png" alt="wEXO" class="w-36 mx-auto mb-10" />
             </div>
 
             <!-- Title — single element, text updates instantly -->
@@ -3972,7 +3970,7 @@
               style="opacity: {$titleOpacity}; font-family: -apple-system, 'SF Pro Display', system-ui, sans-serif; letter-spacing: 0.02em;"
             >
               {onboardingStep === 1
-                ? "EXO connects all your devices into an AI supercomputer."
+                ? "wEXO connects all your devices into an AI supercomputer."
                 : stepTitle}
             </h1>
 
@@ -3987,8 +3985,8 @@
                 The model is automatically distributed. Each device handles a
                 piece.
               {:else if onboardingStep === 4}
-                {stepTitle === "exo self-heals"
-                  ? "exo automatically redistributes the model so inference continues without interruption."
+                {stepTitle === "wEXO self-heals"
+                  ? "wEXO automatically redistributes the model so inference continues without interruption."
                   : "Devices can leave anytime. Laptops close, machines restart."}
               {:else}
                 &nbsp;
@@ -4003,7 +4001,7 @@
               class="absolute left-0 right-0 text-center text-lg text-white/50 font-light tracking-wide z-10"
               style="top: 20px; opacity: {$deviceCountOpacity}; font-family: -apple-system, 'SF Pro Display', system-ui, sans-serif; pointer-events: none;"
             >
-              Your EXO Network
+              Your wEXO Network
             </p>
 
             <!-- Step 1: Real topology graph -->
@@ -4407,7 +4405,7 @@
               type="button"
               onclick={() =>
                 advanceStep(onboardingStep < 4 ? onboardingStep + 1 : 6)}
-              class="inline-flex items-center gap-2.5 px-10 py-3.5 bg-exo-yellow text-exo-black text-sm font-semibold rounded-full cursor-pointer"
+              class="inline-flex items-center gap-2.5 px-10 py-3.5 bg-wEXO-yellow text-wEXO-black text-sm font-semibold rounded-full cursor-pointer"
               style="transition: transform 0.2s ease, box-shadow 0.3s ease, filter 0.2s ease; font-family: -apple-system, 'SF Pro Display', system-ui, sans-serif; letter-spacing: 0.02em;"
               onmouseenter={(e) => {
                 e.currentTarget.style.filter = "brightness(1.08)";
@@ -4480,7 +4478,7 @@
                   type="button"
                   onclick={() => onboardingLaunchModel(model.id)}
                   class="w-full flex items-center justify-between gap-4 px-5 py-4 rounded-xl border transition-all duration-200 cursor-pointer {fitsNow
-                    ? 'border-white/10 bg-white/5 hover:border-exo-yellow/50 hover:bg-exo-yellow/5'
+                    ? 'border-white/10 bg-white/5 hover:border-wEXO-yellow/50 hover:bg-wEXO-yellow/5'
                     : 'border-white/10 bg-white/[0.02] hover:border-white/20 opacity-60'}"
                 >
                   <div class="flex flex-col items-start gap-1 min-w-0">
@@ -4491,7 +4489,7 @@
                       >
                       {#each tags as tag}
                         <span
-                          class="text-[10px] font-sans font-medium px-1.5 py-0.5 rounded-full bg-exo-yellow/10 text-exo-yellow/80"
+                          class="text-[10px] font-sans font-medium px-1.5 py-0.5 rounded-full bg-wEXO-yellow/10 text-wEXO-yellow/80"
                           >{tag}</span
                         >
                       {/each}
@@ -4529,7 +4527,7 @@
               modelPickerContext = "dashboard";
               isModelPickerOpen = true;
             }}
-            class="text-sm font-sans text-white/40 hover:text-exo-yellow transition-colors cursor-pointer underline underline-offset-4 decoration-white/20 hover:decoration-exo-yellow/50"
+            class="text-sm font-sans text-white/40 hover:text-wEXO-yellow transition-colors cursor-pointer underline underline-offset-4 decoration-white/20 hover:decoration-wEXO-yellow/50"
           >
             Browse all models
           </button>
@@ -4559,7 +4557,7 @@
                 class="relative h-2 bg-white/10 rounded-full overflow-hidden"
               >
                 <div
-                  class="absolute inset-y-0 left-0 bg-gradient-to-r from-exo-yellow to-exo-yellow-darker rounded-full transition-all duration-500"
+                  class="absolute inset-y-0 left-0 bg-gradient-to-r from-wEXO-yellow to-wEXO-yellow-darker rounded-full transition-all duration-500"
                   style="width: {onboardingDownloadProgress.percentage}%"
                 ></div>
               </div>
@@ -4581,7 +4579,7 @@
                 class="relative h-2 bg-white/10 rounded-full overflow-hidden"
               >
                 <div
-                  class="absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-exo-yellow to-exo-yellow-darker rounded-full animate-pulse"
+                  class="absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-wEXO-yellow to-wEXO-yellow-darker rounded-full animate-pulse"
                 ></div>
               </div>
               <p class="text-xs font-mono text-white/40 mt-4">
@@ -4637,7 +4635,7 @@
                 class="relative h-2 bg-white/10 rounded-full overflow-hidden"
               >
                 <div
-                  class="absolute inset-y-0 left-0 bg-gradient-to-r from-exo-yellow to-exo-yellow-darker rounded-full transition-all duration-500"
+                  class="absolute inset-y-0 left-0 bg-gradient-to-r from-wEXO-yellow to-wEXO-yellow-darker rounded-full transition-all duration-500"
                   style="width: {onboardingLoadProgress.percentage}%"
                 ></div>
               </div>
@@ -4649,7 +4647,7 @@
           {:else}
             <div class="flex justify-center mb-4">
               <div
-                class="w-8 h-8 border-2 border-exo-yellow/15 border-t-exo-yellow/70 rounded-full animate-spin"
+                class="w-8 h-8 border-2 border-wEXO-yellow/15 border-t-wEXO-yellow/70 rounded-full animate-spin"
               ></div>
             </div>
             <p class="text-sm text-white/30 font-sans">Loading...</p>
@@ -4663,8 +4661,8 @@
           style="opacity: 0; animation: onb-fade-opacity 0.6s ease forwards;"
         >
           <img
-            src="/exo-logo.png"
-            alt="exo"
+            src="/wEXO-logo.png"
+            alt="wEXO"
             class="w-28 mb-6"
             style="opacity: 0.8;"
           />
@@ -4818,7 +4816,7 @@
     <!-- Left: Conversation History Sidebar (hidden in topology-only mode, welcome state, or when toggled off) - Desktop only -->
     {#if !topologyOnlyEnabled && sidebarVisible}
       <div
-        class="hidden md:block w-80 flex-shrink-0 border-r border-exo-yellow/10"
+        class="hidden md:block w-80 flex-shrink-0 border-r border-wEXO-yellow/10"
         role="complementary"
         aria-label="Conversation history"
       >
@@ -4839,7 +4837,7 @@
         in:fade={{ duration: 300 }}
       >
         <div
-          class="flex-1 relative bg-exo-dark-gray/40 rounded-lg overflow-hidden"
+          class="flex-1 relative bg-wEXO-dark-gray/40 rounded-lg overflow-hidden"
         >
           <TopologyGraph
             class="w-full h-full"
@@ -4900,7 +4898,7 @@
               </div>
               <!-- Tooltip on hover -->
               <div
-                class="absolute top-full left-0 mt-2 w-80 p-3 rounded border border-yellow-500/30 bg-exo-dark-gray/95 backdrop-blur-sm opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 shadow-lg"
+                class="absolute top-full left-0 mt-2 w-80 p-3 rounded border border-yellow-500/30 bg-wEXO-dark-gray/95 backdrop-blur-sm opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 shadow-lg"
               >
                 <p class="text-xs text-white/80 mb-2">
                   Thunderbolt 5 hardware detected on multiple nodes. Enable RDMA
@@ -4934,12 +4932,12 @@
           <button
             type="button"
             onclick={toggleTopologyOnlyMode}
-            class="absolute bottom-4 right-4 p-2 rounded border border-exo-yellow/30 bg-exo-dark-gray/80 hover:border-exo-yellow/50 hover:bg-exo-dark-gray transition-colors cursor-pointer backdrop-blur-sm"
+            class="absolute bottom-4 right-4 p-2 rounded border border-wEXO-yellow/30 bg-wEXO-dark-gray/80 hover:border-wEXO-yellow/50 hover:bg-wEXO-dark-gray transition-colors cursor-pointer backdrop-blur-sm"
             title="Exit topology only mode"
             aria-label="Exit topology only mode"
           >
             <svg
-              class="w-5 h-5 text-exo-yellow"
+              class="w-5 h-5 text-wEXO-yellow"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -4964,7 +4962,7 @@
         <div class="flex-1 flex flex-col min-h-0 min-w-0 py-4">
           <!-- Topology Container - Takes most of the space -->
           <div
-            class="flex-1 relative bg-exo-dark-gray/40 mx-4 mb-4 rounded-lg overflow-hidden"
+            class="flex-1 relative bg-wEXO-dark-gray/40 mx-4 mb-4 rounded-lg overflow-hidden"
           >
             <!-- The main topology graph - full container -->
             <TopologyGraph
@@ -4977,13 +4975,13 @@
             <!-- Initial loading state before first data fetch -->
             {#if !update}
               <div
-                class="absolute inset-0 flex items-center justify-center bg-exo-dark-gray/80"
+                class="absolute inset-0 flex items-center justify-center bg-wEXO-dark-gray/80"
                 in:fade={{ duration: 200 }}
                 out:fade={{ duration: 300 }}
               >
                 <div class="text-center">
                   <div
-                    class="w-8 h-8 border-2 border-exo-yellow/30 border-t-exo-yellow rounded-full animate-spin mx-auto mb-4"
+                    class="w-8 h-8 border-2 border-wEXO-yellow/30 border-t-wEXO-yellow rounded-full animate-spin mx-auto mb-4"
                   ></div>
                   <p
                     class="text-xs font-mono text-white/40 tracking-wider uppercase"
@@ -5047,7 +5045,7 @@
 
                 <!-- Tooltip on hover -->
                 <div
-                  class="absolute top-full left-0 mt-2 w-80 p-3 rounded border border-yellow-500/30 bg-exo-dark-gray/95 backdrop-blur-sm opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 shadow-lg"
+                  class="absolute top-full left-0 mt-2 w-80 p-3 rounded border border-yellow-500/30 bg-wEXO-dark-gray/95 backdrop-blur-sm opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 shadow-lg"
                 >
                   <p class="text-xs text-white/80 mb-2">
                     Thunderbolt 5 hardware detected on multiple nodes. Enable
@@ -5082,7 +5080,7 @@
             {#if isFilterActive()}
               <button
                 onclick={clearPreviewNodeFilter}
-                class="absolute top-2 right-2 flex items-center gap-1.5 px-2 py-1 bg-exo-dark-gray/80 border border-exo-yellow/40 rounded text-exo-yellow hover:border-exo-yellow/60 transition-colors cursor-pointer backdrop-blur-sm"
+                class="absolute top-2 right-2 flex items-center gap-1.5 px-2 py-1 bg-wEXO-dark-gray/80 border border-wEXO-yellow/40 rounded text-wEXO-yellow hover:border-wEXO-yellow/60 transition-colors cursor-pointer backdrop-blur-sm"
                 title="Clear filter"
               >
                 <span class="text-[10px] font-mono tracking-wider">
@@ -5141,7 +5139,7 @@
           ></button>
           <!-- Drawer panel -->
           <aside
-            class="fixed right-0 top-0 bottom-0 w-80 bg-exo-dark-gray border-l border-exo-yellow/10 z-50 flex flex-col md:hidden overflow-y-auto"
+            class="fixed right-0 top-0 bottom-0 w-80 bg-wEXO-dark-gray border-l border-wEXO-yellow/10 z-50 flex flex-col md:hidden overflow-y-auto"
             aria-label="Instance controls mobile"
           >
             {@render rightSidebarContent()}
@@ -5150,7 +5148,7 @@
 
         <!-- Right Sidebar: Instance Controls (wider on welcome page for better visibility) - Desktop only -->
         <aside
-          class="hidden md:flex w-80 border-l border-exo-yellow/10 bg-exo-dark-gray flex-col flex-shrink-0"
+          class="hidden md:flex w-80 border-l border-wEXO-yellow/10 bg-wEXO-dark-gray flex-col flex-shrink-0"
           aria-label="Instance controls"
         >
           {@render rightSidebarContent()}
@@ -5163,15 +5161,15 @@
               <!-- Panel Header -->
               <div class="flex items-center gap-2 mb-4">
                 <div
-                  class="w-2 h-2 bg-exo-yellow rounded-full shadow-[0_0_8px_rgba(255,215,0,0.6)] animate-pulse"
+                  class="w-2 h-2 bg-wEXO-yellow rounded-full shadow-[0_0_8px_rgba(255,215,0,0.6)] animate-pulse"
                 ></div>
                 <h3
-                  class="text-xs text-exo-yellow font-mono tracking-[0.2em] uppercase"
+                  class="text-xs text-wEXO-yellow font-mono tracking-[0.2em] uppercase"
                 >
                   Instances
                 </h3>
                 <div
-                  class="flex-1 h-px bg-gradient-to-r from-exo-yellow/30 to-transparent"
+                  class="flex-1 h-px bg-gradient-to-r from-wEXO-yellow/30 to-transparent"
                 ></div>
               </div>
 
@@ -5274,12 +5272,12 @@
                     ></div>
 
                     <div
-                      class="bg-exo-dark-gray/60 border border-l-2 transition-all duration-200 group-hover:bg-exo-dark-gray/80 {isDownloading
+                      class="bg-wEXO-dark-gray/60 border border-l-2 transition-all duration-200 group-hover:bg-wEXO-dark-gray/80 {isDownloading
                         ? 'border-blue-500/30 border-l-blue-400 group-hover:border-blue-500/50'
                         : isFailed
                           ? 'border-red-500/30 border-l-red-400 group-hover:border-red-500/50'
                           : isLoading
-                            ? 'border-exo-yellow/30 border-l-yellow-400 group-hover:border-exo-yellow/50'
+                            ? 'border-wEXO-yellow/30 border-l-yellow-400 group-hover:border-wEXO-yellow/50'
                             : isReady
                               ? 'border-green-500/30 border-l-green-400 group-hover:border-green-500/50'
                               : 'border-teal-500/30 border-l-teal-400 group-hover:border-teal-500/50'} p-3"
@@ -5298,7 +5296,7 @@
                                     : 'bg-teal-400'} rounded-full shadow-[0_0_6px_currentColor]"
                           ></div>
                           <span
-                            class="text-exo-light-gray font-mono text-sm tracking-wider"
+                            class="text-wEXO-light-gray font-mono text-sm tracking-wider"
                             >{id.slice(0, 8).toUpperCase()}</span
                           >
                         </div>
@@ -5311,7 +5309,7 @@
                       </div>
                       <div class="pl-2">
                         <div
-                          class="text-exo-yellow text-xs font-mono tracking-wide truncate"
+                          class="text-wEXO-yellow text-xs font-mono tracking-wide truncate"
                         >
                           {getInstanceModelId(instance)}
                         </div>
@@ -5337,7 +5335,7 @@
                         </div>
                         {#if instanceModelId && instanceModelId !== "Unknown" && instanceModelId !== "Unknown Model"}
                           <a
-                            class="inline-flex items-center gap-1 text-[11px] text-white/60 hover:text-exo-yellow transition-colors mt-1"
+                            class="inline-flex items-center gap-1 text-[11px] text-white/60 hover:text-wEXO-yellow transition-colors mt-1"
                             href={`https://huggingface.co/${instanceModelId}`}
                             target="_blank"
                             rel="noreferrer noopener"
@@ -5394,7 +5392,7 @@
                                   1,
                                 )}%</span
                               >
-                              <span class="text-exo-light-gray"
+                              <span class="text-wEXO-light-gray"
                                 >{formatBytes(
                                   downloadInfo.progress.downloadedBytes,
                                 )}/{formatBytes(
@@ -5403,7 +5401,7 @@
                               >
                             </div>
                             <div
-                              class="relative h-1.5 bg-exo-black/60 rounded-sm overflow-hidden"
+                              class="relative h-1.5 bg-wEXO-black/60 rounded-sm overflow-hidden"
                             >
                               <div
                                 class="absolute inset-y-0 left-0 bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-300"
@@ -5412,7 +5410,7 @@
                               ></div>
                             </div>
                             <div
-                              class="flex justify-between text-xs font-mono text-exo-light-gray"
+                              class="flex justify-between text-xs font-mono text-wEXO-light-gray"
                             >
                               <span
                                 >{formatSpeed(
@@ -5445,7 +5443,7 @@
                                     nodeProg.nodeId,
                                   )}
                                 <div
-                                  class="rounded border border-exo-medium-gray/40 bg-exo-black/30 p-2"
+                                  class="rounded border border-wEXO-medium-gray/40 bg-wEXO-black/30 p-2"
                                 >
                                   <button
                                     type="button"
@@ -5456,7 +5454,7 @@
                                       )}
                                   >
                                     <div
-                                      class="flex items-center justify-between text-[11px] font-mono text-exo-light-gray"
+                                      class="flex items-center justify-between text-[11px] font-mono text-wEXO-light-gray"
                                     >
                                       <span class="text-white/80 truncate pr-2"
                                         >{nodeProg.nodeName}</span
@@ -5466,7 +5464,7 @@
                                       >
                                         {nodePercent.toFixed(1)}%
                                         <svg
-                                          class="w-3 h-3 text-exo-light-gray"
+                                          class="w-3 h-3 text-wEXO-light-gray"
                                           viewBox="0 0 20 20"
                                           fill="none"
                                           stroke="currentColor"
@@ -5482,7 +5480,7 @@
                                       </span>
                                     </div>
                                     <div
-                                      class="relative h-1.5 bg-exo-black/60 rounded-sm overflow-hidden"
+                                      class="relative h-1.5 bg-wEXO-black/60 rounded-sm overflow-hidden"
                                     >
                                       <div
                                         class="absolute inset-y-0 left-0 bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-300"
@@ -5490,7 +5488,7 @@
                                       ></div>
                                     </div>
                                     <div
-                                      class="flex items-center justify-between text-[11px] font-mono text-exo-light-gray"
+                                      class="flex items-center justify-between text-[11px] font-mono text-wEXO-light-gray"
                                     >
                                       <span
                                         >{formatBytes(
@@ -5514,7 +5512,7 @@
                                     <div class="mt-2 space-y-1.5">
                                       {#if nodeProg.progress?.files ?? [].length === 0}
                                         <div
-                                          class="text-[11px] font-mono text-exo-light-gray/70"
+                                          class="text-[11px] font-mono text-wEXO-light-gray/70"
                                         >
                                           No file details reported.
                                         </div>
@@ -5527,10 +5525,10 @@
                                           {@const isFileComplete =
                                             filePercent >= 100}
                                           <div
-                                            class="rounded border border-exo-medium-gray/30 bg-exo-black/40 p-2"
+                                            class="rounded border border-wEXO-medium-gray/30 bg-wEXO-black/40 p-2"
                                           >
                                             <div
-                                              class="flex items-center justify-between text-[10px] font-mono text-exo-light-gray/90"
+                                              class="flex items-center justify-between text-[10px] font-mono text-wEXO-light-gray/90"
                                             >
                                               <span class="truncate pr-2"
                                                 >{f.name}</span
@@ -5543,19 +5541,19 @@
                                               >
                                             </div>
                                             <div
-                                              class="relative h-1 bg-exo-black/60 rounded-sm overflow-hidden mt-1"
+                                              class="relative h-1 bg-wEXO-black/60 rounded-sm overflow-hidden mt-1"
                                             >
                                               <div
                                                 class="absolute inset-y-0 left-0 bg-gradient-to-r {isFileComplete
                                                   ? 'from-green-500 to-green-400'
-                                                  : 'from-exo-yellow to-exo-yellow/70'} transition-all duration-300"
+                                                  : 'from-wEXO-yellow to-wEXO-yellow/70'} transition-all duration-300"
                                                 style="width: {filePercent.toFixed(
                                                   1,
                                                 )}%"
                                               ></div>
                                             </div>
                                             <div
-                                              class="flex items-center justify-between text-[10px] text-exo-light-gray/70 mt-0.5"
+                                              class="flex items-center justify-between text-[10px] text-wEXO-light-gray/70 mt-0.5"
                                             >
                                               <span
                                                 >{formatBytes(
@@ -5617,13 +5615,13 @@
                                         100
                                       ).toFixed(0)}%</span
                                     >
-                                    <span class="text-exo-light-gray"
+                                    <span class="text-wEXO-light-gray"
                                       >{loadStatus.layersLoaded ?? 0} / {loadStatus.totalLayers}
                                       layers</span
                                     >
                                   </div>
                                   <div
-                                    class="relative h-1.5 bg-exo-black/60 rounded-sm overflow-hidden"
+                                    class="relative h-1.5 bg-wEXO-black/60 rounded-sm overflow-hidden"
                                   >
                                     <div
                                       class="absolute inset-y-0 left-0 bg-gradient-to-r from-yellow-500 to-yellow-400 transition-all duration-300"
@@ -5675,14 +5673,14 @@
           <div class="p-4 flex-1 overflow-y-auto">
             <!-- Panel Header -->
             <div class="flex items-center gap-2 mb-3 flex-shrink-0">
-              <div class="w-2 h-2 border border-exo-yellow/60 rotate-45"></div>
+              <div class="w-2 h-2 border border-wEXO-yellow/60 rotate-45"></div>
               <h3
-                class="text-xs text-exo-yellow font-mono tracking-[0.2em] uppercase"
+                class="text-xs text-wEXO-yellow font-mono tracking-[0.2em] uppercase"
               >
                 Load Model
               </h3>
               <div
-                class="flex-1 h-px bg-gradient-to-r from-exo-yellow/30 to-transparent"
+                class="flex-1 h-px bg-gradient-to-r from-wEXO-yellow/30 to-transparent"
               ></div>
               <span class="text-sm text-white/70 font-mono"
                 >{models.length} models</span
@@ -5697,7 +5695,7 @@
                   modelPickerContext = "dashboard";
                   isModelPickerOpen = true;
                 }}
-                class="w-full bg-exo-medium-gray/50 border border-exo-yellow/30 rounded pl-3 pr-8 py-2.5 text-sm font-mono text-left tracking-wide cursor-pointer transition-all duration-200 hover:border-exo-yellow/50 focus:outline-none focus:border-exo-yellow/70 relative"
+                class="w-full bg-wEXO-medium-gray/50 border border-wEXO-yellow/30 rounded pl-3 pr-8 py-2.5 text-sm font-mono text-left tracking-wide cursor-pointer transition-all duration-200 hover:border-wEXO-yellow/50 focus:outline-none focus:border-wEXO-yellow/70 relative"
               >
                 {#if selectedModelId}
                   {@const foundModel = models.find(
@@ -5709,7 +5707,7 @@
                       class="flex items-center justify-between gap-2 w-full pr-4"
                     >
                       <span
-                        class="flex items-center gap-2 text-exo-light-gray truncate"
+                        class="flex items-center gap-2 text-wEXO-light-gray truncate"
                       >
                         <span class="truncate"
                           >{foundModel.name || foundModel.id}</span
@@ -5722,7 +5720,7 @@
                       >
                     </span>
                   {:else}
-                    <span class="text-exo-light-gray">{selectedModelId}</span>
+                    <span class="text-wEXO-light-gray">{selectedModelId}</span>
                   {/if}
                 {:else if bestRunningModelId}
                   {@const runModel = models.find(
@@ -5734,7 +5732,7 @@
                       class="flex items-center justify-between gap-2 w-full pr-4"
                     >
                       <span
-                        class="flex items-center gap-2 text-exo-light-gray truncate"
+                        class="flex items-center gap-2 text-wEXO-light-gray truncate"
                       >
                         <span class="truncate"
                           >{runModel.name || runModel.id}</span
@@ -5747,7 +5745,8 @@
                       >
                     </span>
                   {:else}
-                    <span class="text-exo-light-gray">{bestRunningModelId}</span
+                    <span class="text-wEXO-light-gray"
+                      >{bestRunningModelId}</span
                     >
                   {/if}
                 {:else}
@@ -5757,7 +5756,7 @@
                   class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"
                 >
                   <svg
-                    class="w-4 h-4 text-exo-yellow/60"
+                    class="w-4 h-4 text-wEXO-yellow/60"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -5814,17 +5813,18 @@
                         }}
                         class="flex items-center gap-2 py-1.5 px-3 text-xs font-mono border rounded transition-all duration-200 cursor-pointer {selectedSharding ===
                         'Pipeline'
-                          ? 'bg-transparent text-exo-yellow border-exo-yellow'
-                          : 'bg-transparent text-white/70 border-exo-medium-gray/50 hover:border-exo-yellow/50'}"
+                          ? 'bg-transparent text-wEXO-yellow border-wEXO-yellow'
+                          : 'bg-transparent text-white/70 border-wEXO-medium-gray/50 hover:border-wEXO-yellow/50'}"
                       >
                         <span
                           class="w-3 h-3 rounded-full border-2 flex items-center justify-center {selectedSharding ===
                           'Pipeline'
-                            ? 'border-exo-yellow'
-                            : 'border-exo-medium-gray'}"
+                            ? 'border-wEXO-yellow'
+                            : 'border-wEXO-medium-gray'}"
                         >
                           {#if selectedSharding === "Pipeline"}
-                            <span class="w-1.5 h-1.5 rounded-full bg-exo-yellow"
+                            <span
+                              class="w-1.5 h-1.5 rounded-full bg-wEXO-yellow"
                             ></span>
                           {/if}
                         </span>
@@ -5838,17 +5838,18 @@
                         }}
                         class="flex items-center gap-2 py-1.5 px-3 text-xs font-mono border rounded transition-all duration-200 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 {selectedSharding ===
                         'Tensor'
-                          ? 'bg-transparent text-exo-yellow border-exo-yellow'
-                          : 'bg-transparent text-white/70 border-exo-medium-gray/50 hover:border-exo-yellow/50'}"
+                          ? 'bg-transparent text-wEXO-yellow border-wEXO-yellow'
+                          : 'bg-transparent text-white/70 border-wEXO-medium-gray/50 hover:border-wEXO-yellow/50'}"
                       >
                         <span
                           class="w-3 h-3 rounded-full border-2 flex items-center justify-center {selectedSharding ===
                           'Tensor'
-                            ? 'border-exo-yellow'
-                            : 'border-exo-medium-gray'}"
+                            ? 'border-wEXO-yellow'
+                            : 'border-wEXO-medium-gray'}"
                         >
                           {#if selectedSharding === "Tensor"}
-                            <span class="w-1.5 h-1.5 rounded-full bg-exo-yellow"
+                            <span
+                              class="w-1.5 h-1.5 rounded-full bg-wEXO-yellow"
                             ></span>
                           {/if}
                         </span>
@@ -5871,17 +5872,18 @@
                         }}
                         class="flex items-center gap-2 py-1.5 px-3 text-xs font-mono border rounded transition-all duration-200 cursor-pointer {selectedInstanceType ===
                         'MlxRing'
-                          ? 'bg-transparent text-exo-yellow border-exo-yellow'
-                          : 'bg-transparent text-white/70 border-exo-medium-gray/50 hover:border-exo-yellow/50'}"
+                          ? 'bg-transparent text-wEXO-yellow border-wEXO-yellow'
+                          : 'bg-transparent text-white/70 border-wEXO-medium-gray/50 hover:border-wEXO-yellow/50'}"
                       >
                         <span
                           class="w-3 h-3 rounded-full border-2 flex items-center justify-center {selectedInstanceType ===
                           'MlxRing'
-                            ? 'border-exo-yellow'
-                            : 'border-exo-medium-gray'}"
+                            ? 'border-wEXO-yellow'
+                            : 'border-wEXO-medium-gray'}"
                         >
                           {#if selectedInstanceType === "MlxRing"}
-                            <span class="w-1.5 h-1.5 rounded-full bg-exo-yellow"
+                            <span
+                              class="w-1.5 h-1.5 rounded-full bg-wEXO-yellow"
                             ></span>
                           {/if}
                         </span>
@@ -5895,17 +5897,18 @@
                         }}
                         class="flex items-center gap-2 py-1.5 px-3 text-xs font-mono border rounded transition-all duration-200 cursor-pointer {selectedInstanceType ===
                         'MlxJaccl'
-                          ? 'bg-transparent text-exo-yellow border-exo-yellow'
-                          : 'bg-transparent text-white/70 border-exo-medium-gray/50 hover:border-exo-yellow/50'}"
+                          ? 'bg-transparent text-wEXO-yellow border-wEXO-yellow'
+                          : 'bg-transparent text-white/70 border-wEXO-medium-gray/50 hover:border-wEXO-yellow/50'}"
                       >
                         <span
                           class="w-3 h-3 rounded-full border-2 flex items-center justify-center {selectedInstanceType ===
                           'MlxJaccl'
-                            ? 'border-exo-yellow'
-                            : 'border-exo-medium-gray'}"
+                            ? 'border-wEXO-yellow'
+                            : 'border-wEXO-medium-gray'}"
                         >
                           {#if selectedInstanceType === "MlxJaccl"}
-                            <span class="w-1.5 h-1.5 rounded-full bg-exo-yellow"
+                            <span
+                              class="w-1.5 h-1.5 rounded-full bg-wEXO-yellow"
                             ></span>
                           {/if}
                         </span>
@@ -5920,17 +5923,18 @@
                         }}
                         class="flex items-center gap-2 py-1.5 px-3 text-xs font-mono border rounded transition-all duration-200 cursor-pointer {selectedInstanceType ===
                         'Tinygrad'
-                          ? 'bg-transparent text-exo-yellow border-exo-yellow'
-                          : 'bg-transparent text-white/70 border-exo-medium-gray/50 hover:border-exo-yellow/50'}"
+                          ? 'bg-transparent text-wEXO-yellow border-wEXO-yellow'
+                          : 'bg-transparent text-white/70 border-wEXO-medium-gray/50 hover:border-wEXO-yellow/50'}"
                       >
                         <span
                           class="w-3 h-3 rounded-full border-2 flex items-center justify-center {selectedInstanceType ===
                           'Tinygrad'
-                            ? 'border-exo-yellow'
-                            : 'border-exo-medium-gray'}"
+                            ? 'border-wEXO-yellow'
+                            : 'border-wEXO-medium-gray'}"
                         >
                           {#if selectedInstanceType === "Tinygrad"}
-                            <span class="w-1.5 h-1.5 rounded-full bg-exo-yellow"
+                            <span
+                              class="w-1.5 h-1.5 rounded-full bg-wEXO-yellow"
                             ></span>
                           {/if}
                         </span>
@@ -5954,7 +5958,7 @@
                     >
                       <!-- Track background -->
                       <div
-                        class="absolute top-6 left-0 right-0 h-2 bg-exo-medium-gray/50 rounded-full"
+                        class="absolute top-6 left-0 right-0 h-2 bg-wEXO-medium-gray/50 rounded-full"
                       ></div>
                       <!-- Active track (fills up to selected) -->
                       {#if availableMinNodes > 1}
@@ -5979,14 +5983,14 @@
                         >
                           <span
                             class="rounded-full transition-all {isSelected
-                              ? 'w-6 h-6 bg-exo-yellow shadow-[0_0_10px_rgba(255,215,0,0.6)]'
+                              ? 'w-6 h-6 bg-wEXO-yellow shadow-[0_0_10px_rgba(255,215,0,0.6)]'
                               : isValid
-                                ? 'w-4 h-4 bg-exo-light-gray/70 mt-1'
-                                : 'w-3 h-3 bg-exo-medium-gray/50 mt-1.5'}"
+                                ? 'w-4 h-4 bg-wEXO-light-gray/70 mt-1'
+                                : 'w-3 h-3 bg-wEXO-medium-gray/50 mt-1.5'}"
                           ></span>
                           <span
                             class="text-sm font-mono mt-1.5 tabular-nums transition-colors {isSelected
-                              ? 'text-exo-yellow font-bold'
+                              ? 'text-wEXO-yellow font-bold'
                               : isValid
                                 ? 'text-white/70'
                                 : 'text-white/30'}">{n}</span
@@ -6012,7 +6016,7 @@
               {:else if loadingPreviews}
                 <div class="text-center py-8">
                   <div
-                    class="text-xs text-exo-yellow font-mono tracking-wider uppercase animate-pulse"
+                    class="text-xs text-wEXO-yellow font-mono tracking-wider uppercase animate-pulse"
                   >
                     Loading preview...
                   </div>
@@ -6096,10 +6100,10 @@
                 {#if chatLaunchState === "launching"}
                   <div class="flex flex-col items-center gap-3">
                     <div
-                      class="w-8 h-8 border-2 border-exo-yellow/30 border-t-exo-yellow rounded-full animate-spin"
+                      class="w-8 h-8 border-2 border-wEXO-yellow/30 border-t-wEXO-yellow rounded-full animate-spin"
                     ></div>
                     <p
-                      class="text-xs text-exo-light-gray font-mono uppercase tracking-wider"
+                      class="text-xs text-wEXO-light-gray font-mono uppercase tracking-wider"
                     >
                       Preparing to launch&hellip;
                     </p>
@@ -6109,26 +6113,26 @@
                     <div
                       class="flex items-center justify-between text-xs font-mono"
                     >
-                      <span class="text-exo-yellow uppercase tracking-wider"
+                      <span class="text-wEXO-yellow uppercase tracking-wider"
                         >Downloading</span
                       >
                       {#if chatLaunchDownload}
-                        <span class="text-exo-light-gray tabular-nums">
+                        <span class="text-wEXO-light-gray tabular-nums">
                           {chatLaunchDownload.percentage.toFixed(1)}%
                         </span>
                       {/if}
                     </div>
                     <div
-                      class="w-full h-2 bg-exo-dark-gray rounded-full overflow-hidden border border-exo-medium-gray/30"
+                      class="w-full h-2 bg-wEXO-dark-gray rounded-full overflow-hidden border border-wEXO-medium-gray/30"
                     >
                       <div
-                        class="h-full bg-gradient-to-r from-exo-yellow/80 to-exo-yellow rounded-full transition-all duration-300"
+                        class="h-full bg-gradient-to-r from-wEXO-yellow/80 to-wEXO-yellow rounded-full transition-all duration-300"
                         style="width: {chatLaunchDownload?.percentage ?? 0}%"
                       ></div>
                     </div>
                     {#if chatLaunchDownload}
                       <div
-                        class="flex justify-between text-[10px] text-exo-light-gray/60 font-mono"
+                        class="flex justify-between text-[10px] text-wEXO-light-gray/60 font-mono"
                       >
                         <span
                           >{formatBytes(chatLaunchDownload.downloadedBytes)} / {formatBytes(
@@ -6151,21 +6155,21 @@
                     <div
                       class="flex items-center justify-between text-xs font-mono"
                     >
-                      <span class="text-exo-yellow uppercase tracking-wider"
+                      <span class="text-wEXO-yellow uppercase tracking-wider"
                         >Loading model</span
                       >
                       {#if chatLaunchLoadProgress}
-                        <span class="text-exo-light-gray tabular-nums">
+                        <span class="text-wEXO-light-gray tabular-nums">
                           {chatLaunchLoadProgress.layersLoaded}/{chatLaunchLoadProgress.totalLayers}
                           layers
                         </span>
                       {/if}
                     </div>
                     <div
-                      class="w-full h-2 bg-exo-dark-gray rounded-full overflow-hidden border border-exo-medium-gray/30"
+                      class="w-full h-2 bg-wEXO-dark-gray rounded-full overflow-hidden border border-wEXO-medium-gray/30"
                     >
                       <div
-                        class="h-full bg-gradient-to-r from-exo-yellow/80 to-exo-yellow rounded-full transition-all duration-300"
+                        class="h-full bg-gradient-to-r from-wEXO-yellow/80 to-wEXO-yellow rounded-full transition-all duration-300"
                         style="width: {chatLaunchLoadProgress?.percentage ??
                           0}%"
                       ></div>
@@ -6175,7 +6179,7 @@
               </div>
             </div>
             <div
-              class="flex-shrink-0 px-8 pb-6 pt-4 bg-gradient-to-t from-exo-black via-exo-black to-transparent"
+              class="flex-shrink-0 px-8 pb-6 pt-4 bg-gradient-to-t from-wEXO-black via-wEXO-black to-transparent"
             >
               <div class="max-w-7xl mx-auto">
                 <ChatForm
@@ -6208,7 +6212,7 @@
                     in:fade={{ duration: 300 }}
                   >
                     <p
-                      class="text-xs text-exo-light-gray/60 font-mono uppercase tracking-wider"
+                      class="text-xs text-wEXO-light-gray/60 font-mono uppercase tracking-wider"
                     >
                       Try asking
                     </p>
@@ -6221,7 +6225,7 @@
                             selectedChatCategory = null;
                             handleChatSend(prompt);
                           }}
-                          class="text-left px-3 py-2.5 text-xs text-exo-light-gray hover:text-white font-mono rounded-lg border border-exo-medium-gray/30 hover:border-exo-yellow/30 bg-exo-dark-gray/30 hover:bg-exo-dark-gray/60 transition-all duration-200 cursor-pointer"
+                          class="text-left px-3 py-2.5 text-xs text-wEXO-light-gray hover:text-white font-mono rounded-lg border border-wEXO-medium-gray/30 hover:border-wEXO-yellow/30 bg-wEXO-dark-gray/30 hover:bg-wEXO-dark-gray/60 transition-all duration-200 cursor-pointer"
                         >
                           {prompt}
                         </button>
@@ -6232,7 +6236,7 @@
               </div>
             </div>
             <div
-              class="flex-shrink-0 px-8 pb-6 pt-4 bg-gradient-to-t from-exo-black via-exo-black to-transparent"
+              class="flex-shrink-0 px-8 pb-6 pt-4 bg-gradient-to-t from-wEXO-black via-wEXO-black to-transparent"
             >
               <div class="max-w-7xl mx-auto">
                 <ChatForm
@@ -6267,7 +6271,7 @@
               />
             </div>
             <div
-              class="flex-shrink-0 px-8 pb-6 pt-4 bg-gradient-to-t from-exo-black via-exo-black to-transparent"
+              class="flex-shrink-0 px-8 pb-6 pt-4 bg-gradient-to-t from-wEXO-black via-wEXO-black to-transparent"
             >
               <div class="max-w-7xl mx-auto">
                 <ChatForm
@@ -6287,22 +6291,22 @@
         <!-- Right: Mini-Map Sidebar - Desktop only -->
         {#if minimized}
           <aside
-            class="hidden md:flex w-80 border-l border-exo-yellow/20 bg-exo-dark-gray flex-col flex-shrink-0 overflow-y-auto"
+            class="hidden md:flex w-80 border-l border-wEXO-yellow/20 bg-wEXO-dark-gray flex-col flex-shrink-0 overflow-y-auto"
             in:fly={{ x: 100, duration: 400, easing: cubicInOut }}
             aria-label="Cluster topology"
           >
             <!-- Topology Section - clickable to go back to main view -->
             <button
-              class="p-4 border-b border-exo-medium-gray/30 w-full text-left cursor-pointer hover:bg-exo-medium-gray/10 transition-colors"
+              class="p-4 border-b border-wEXO-medium-gray/30 w-full text-left cursor-pointer hover:bg-wEXO-medium-gray/10 transition-colors"
               onclick={handleGoHome}
               title="Click to return to main topology view"
             >
               <div class="flex items-center justify-between mb-3">
                 <div
-                  class="text-xs text-exo-yellow tracking-[0.2em] uppercase flex items-center gap-2"
+                  class="text-xs text-wEXO-yellow tracking-[0.2em] uppercase flex items-center gap-2"
                 >
                   <span
-                    class="w-1.5 h-1.5 bg-exo-yellow rounded-full status-pulse"
+                    class="w-1.5 h-1.5 bg-wEXO-yellow rounded-full status-pulse"
                   ></span>
                   TOPOLOGY
                 </div>
@@ -6312,7 +6316,7 @@
               </div>
 
               <div
-                class="relative aspect-square bg-exo-dark-gray rounded-lg overflow-hidden pointer-events-none"
+                class="relative aspect-square bg-wEXO-dark-gray rounded-lg overflow-hidden pointer-events-none"
               >
                 <TopologyGraph
                   highlightedNodes={highlightedNodes()}
@@ -6329,15 +6333,15 @@
                 <!-- Panel Header -->
                 <div class="flex items-center gap-2 mb-4">
                   <div
-                    class="w-2 h-2 bg-exo-yellow rounded-full shadow-[0_0_8px_rgba(255,215,0,0.6)] animate-pulse"
+                    class="w-2 h-2 bg-wEXO-yellow rounded-full shadow-[0_0_8px_rgba(255,215,0,0.6)] animate-pulse"
                   ></div>
                   <h3
-                    class="text-xs text-exo-yellow font-mono tracking-[0.2em] uppercase"
+                    class="text-xs text-wEXO-yellow font-mono tracking-[0.2em] uppercase"
                   >
                     Instances
                   </h3>
                   <div
-                    class="flex-1 h-px bg-gradient-to-r from-exo-yellow/30 to-transparent"
+                    class="flex-1 h-px bg-gradient-to-r from-wEXO-yellow/30 to-transparent"
                   ></div>
                 </div>
                 <div
@@ -6437,12 +6441,12 @@
                       ></div>
 
                       <div
-                        class="bg-exo-dark-gray/60 border border-l-2 {isDownloading
+                        class="bg-wEXO-dark-gray/60 border border-l-2 {isDownloading
                           ? 'border-blue-500/30 border-l-blue-400'
                           : isFailed
                             ? 'border-red-500/30 border-l-red-400'
                             : isLoading
-                              ? 'border-exo-yellow/30 border-l-yellow-400'
+                              ? 'border-wEXO-yellow/30 border-l-yellow-400'
                               : isReady
                                 ? 'border-green-500/30 border-l-green-400'
                                 : 'border-teal-500/30 border-l-teal-400'} p-3"
@@ -6461,7 +6465,7 @@
                                       : 'bg-teal-400'} rounded-full shadow-[0_0_6px_currentColor]"
                             ></div>
                             <span
-                              class="text-exo-light-gray font-mono text-sm tracking-wider"
+                              class="text-wEXO-light-gray font-mono text-sm tracking-wider"
                               >{id.slice(0, 8).toUpperCase()}</span
                             >
                           </div>
@@ -6474,7 +6478,7 @@
                         </div>
                         <div class="pl-2">
                           <div
-                            class="text-exo-yellow text-xs font-mono tracking-wide truncate"
+                            class="text-wEXO-yellow text-xs font-mono tracking-wide truncate"
                           >
                             {getInstanceModelId(instance)}
                           </div>
@@ -6500,7 +6504,7 @@
                           </div>
                           {#if instanceModelId && instanceModelId !== "Unknown" && instanceModelId !== "Unknown Model"}
                             <a
-                              class="inline-flex items-center gap-1 text-[11px] text-white/60 hover:text-exo-yellow transition-colors mt-1"
+                              class="inline-flex items-center gap-1 text-[11px] text-white/60 hover:text-wEXO-yellow transition-colors mt-1"
                               href={`https://huggingface.co/${instanceModelId}`}
                               target="_blank"
                               rel="noreferrer noopener"
@@ -6561,7 +6565,7 @@
                                     1,
                                   )}%</span
                                 >
-                                <span class="text-exo-light-gray"
+                                <span class="text-wEXO-light-gray"
                                   >{formatBytes(
                                     downloadInfo.progress.downloadedBytes,
                                   )}/{formatBytes(
@@ -6570,7 +6574,7 @@
                                 >
                               </div>
                               <div
-                                class="relative h-1.5 bg-exo-black/60 rounded-sm overflow-hidden"
+                                class="relative h-1.5 bg-wEXO-black/60 rounded-sm overflow-hidden"
                               >
                                 <div
                                   class="absolute inset-y-0 left-0 bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-300"
@@ -6579,7 +6583,7 @@
                                 ></div>
                               </div>
                               <div
-                                class="flex justify-between text-xs font-mono text-exo-light-gray"
+                                class="flex justify-between text-xs font-mono text-wEXO-light-gray"
                               >
                                 <span
                                   >{formatSpeed(
@@ -6612,7 +6616,7 @@
                                       nodeProg.nodeId,
                                     )}
                                   <div
-                                    class="rounded border border-exo-medium-gray/40 bg-exo-black/30 p-2"
+                                    class="rounded border border-wEXO-medium-gray/40 bg-wEXO-black/30 p-2"
                                   >
                                     <button
                                       type="button"
@@ -6623,7 +6627,7 @@
                                         )}
                                     >
                                       <div
-                                        class="flex items-center justify-between text-[11px] font-mono text-exo-light-gray"
+                                        class="flex items-center justify-between text-[11px] font-mono text-wEXO-light-gray"
                                       >
                                         <span
                                           class="text-white/80 truncate pr-2"
@@ -6634,7 +6638,7 @@
                                         >
                                           {nodePercent.toFixed(1)}%
                                           <svg
-                                            class="w-3 h-3 text-exo-light-gray"
+                                            class="w-3 h-3 text-wEXO-light-gray"
                                             viewBox="0 0 20 20"
                                             fill="none"
                                             stroke="currentColor"
@@ -6650,7 +6654,7 @@
                                         </span>
                                       </div>
                                       <div
-                                        class="relative h-1.5 bg-exo-black/60 rounded-sm overflow-hidden"
+                                        class="relative h-1.5 bg-wEXO-black/60 rounded-sm overflow-hidden"
                                       >
                                         <div
                                           class="absolute inset-y-0 left-0 bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-300"
@@ -6660,7 +6664,7 @@
                                         ></div>
                                       </div>
                                       <div
-                                        class="flex items-center justify-between text-[11px] font-mono text-exo-light-gray"
+                                        class="flex items-center justify-between text-[11px] font-mono text-wEXO-light-gray"
                                       >
                                         <span
                                           >{formatBytes(
@@ -6684,7 +6688,7 @@
                                       <div class="mt-2 space-y-1.5">
                                         {#if nodeProg.progress?.files ?? [].length === 0}
                                           <div
-                                            class="text-[11px] font-mono text-exo-light-gray/70"
+                                            class="text-[11px] font-mono text-wEXO-light-gray/70"
                                           >
                                             No file details reported.
                                           </div>
@@ -6697,10 +6701,10 @@
                                             {@const isFileComplete =
                                               filePercent >= 100}
                                             <div
-                                              class="rounded border border-exo-medium-gray/30 bg-exo-black/40 p-2"
+                                              class="rounded border border-wEXO-medium-gray/30 bg-wEXO-black/40 p-2"
                                             >
                                               <div
-                                                class="flex items-center justify-between text-[10px] font-mono text-exo-light-gray/90"
+                                                class="flex items-center justify-between text-[10px] font-mono text-wEXO-light-gray/90"
                                               >
                                                 <span class="truncate pr-2"
                                                   >{f.name}</span
@@ -6715,19 +6719,19 @@
                                                 >
                                               </div>
                                               <div
-                                                class="relative h-1 bg-exo-black/60 rounded-sm overflow-hidden mt-1"
+                                                class="relative h-1 bg-wEXO-black/60 rounded-sm overflow-hidden mt-1"
                                               >
                                                 <div
                                                   class="absolute inset-y-0 left-0 bg-gradient-to-r {isFileComplete
                                                     ? 'from-green-500 to-green-400'
-                                                    : 'from-exo-yellow to-exo-yellow/70'} transition-all duration-300"
+                                                    : 'from-wEXO-yellow to-wEXO-yellow/70'} transition-all duration-300"
                                                   style="width: {filePercent.toFixed(
                                                     1,
                                                   )}%"
                                                 ></div>
                                               </div>
                                               <div
-                                                class="flex items-center justify-between text-[10px] text-exo-light-gray/70 mt-0.5"
+                                                class="flex items-center justify-between text-[10px] text-wEXO-light-gray/70 mt-0.5"
                                               >
                                                 <span
                                                   >{formatBytes(
@@ -6788,13 +6792,13 @@
                                           100
                                         ).toFixed(0)}%</span
                                       >
-                                      <span class="text-exo-light-gray"
+                                      <span class="text-wEXO-light-gray"
                                         >{loadStatus.layersLoaded ?? 0} / {loadStatus.totalLayers}
                                         layers</span
                                       >
                                     </div>
                                     <div
-                                      class="relative h-1.5 bg-exo-black/60 rounded-sm overflow-hidden"
+                                      class="relative h-1.5 bg-wEXO-black/60 rounded-sm overflow-hidden"
                                     >
                                       <div
                                         class="absolute inset-y-0 left-0 bg-gradient-to-r from-yellow-500 to-yellow-400 transition-all duration-300"

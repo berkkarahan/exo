@@ -3,7 +3,10 @@ from pathlib import Path
 import pytest
 
 from exo.shared.types.events import TestEvent
-from exo.utils.disk_event_log import DiskEventLog
+from exo.utils.disk_event_log import (
+    _MAX_ARCHIVES,  # pyright: ignore[reportPrivateUsage]
+    DiskEventLog,
+)
 
 
 @pytest.fixture
@@ -140,10 +143,11 @@ def test_successive_sessions(log_dir: Path):
     assert should_be_first_archive == first_archive
 
 
-def test_rotation_keeps_at_most_5_archives(log_dir: Path):
-    """After 7 sessions, only the 5 most recent archives should remain."""
+def test_rotation_keeps_only_max_archives(log_dir: Path):
+    """Only the most recent ``_MAX_ARCHIVES`` archives should remain."""
+    total = _MAX_ARCHIVES + 2
     all_archives: list[Path] = []
-    for _ in range(7):
+    for _ in range(total):
         log = DiskEventLog(log_dir)
         log.append(TestEvent())
         log.close()
@@ -153,3 +157,45 @@ def test_rotation_keeps_at_most_5_archives(log_dir: Path):
         assert not old.exists()
     for recent in all_archives[2:]:
         assert recent.exists()
+
+
+def test_iter_persisted_across_sessions(log_dir: Path):
+    """Persisted events from prior sessions are readable in chronological order."""
+    first = DiskEventLog(log_dir)
+    first_events = [TestEvent() for _ in range(3)]
+    for event in first_events:
+        first.append(event)
+    first.close()
+
+    second = DiskEventLog(log_dir)
+    second_events = [TestEvent() for _ in range(2)]
+    for event in second_events:
+        second.append(event)
+
+    persisted = list(second.iter_persisted())
+
+    # 3 archived from the first session, then 2 from the active second session.
+    assert [e.event_id for e in persisted] == [
+        e.event_id for e in [*first_events, *second_events]
+    ]
+    second.close()
+
+
+def test_iter_persisted_empty_log(log_dir: Path):
+    log = DiskEventLog(log_dir)
+    assert list(log.iter_persisted()) == []
+    log.close()
+
+
+def test_iter_persisted_snapshots_active_file(log_dir: Path):
+    """Appending during iteration must not feed new events back into the replay."""
+    log = DiskEventLog(log_dir)
+    log.append(TestEvent())
+
+    seen = 0
+    for _event in log.iter_persisted():
+        seen += 1
+        log.append(TestEvent())  # would loop forever without a snapshot
+
+    assert seen == 1
+    log.close()

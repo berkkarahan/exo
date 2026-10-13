@@ -212,10 +212,10 @@
   <div class="mb-6 space-y-4">
     <details open class="group [&_summary::-webkit-details-marker]:hidden">
       <summary
-        class="cursor-pointer list-none text-exo-yellow text-xs font-mono tracking-widest uppercase flex items-center gap-2 hover:opacity-80 transition-opacity"
+        class="cursor-pointer list-none text-wEXO-yellow text-xs font-mono tracking-widest uppercase flex items-center gap-2 hover:opacity-80 transition-opacity"
       >
         <span
-          class="inline-block transition-transform group-open:rotate-90 text-exo-light-gray"
+          class="inline-block transition-transform group-open:rotate-90 text-wEXO-light-gray"
           >▶</span
         >
         Prefill vs Decode
@@ -230,10 +230,10 @@
     </details>
     <details class="group [&_summary::-webkit-details-marker]:hidden">
       <summary
-        class="cursor-pointer list-none text-exo-yellow text-xs font-mono tracking-widest uppercase flex items-center gap-2 hover:opacity-80 transition-opacity"
+        class="cursor-pointer list-none text-wEXO-yellow text-xs font-mono tracking-widest uppercase flex items-center gap-2 hover:opacity-80 transition-opacity"
       >
         <span
-          class="inline-block transition-transform group-open:rotate-90 text-exo-light-gray"
+          class="inline-block transition-transform group-open:rotate-90 text-wEXO-light-gray"
           >▶</span
         >
         Linking Instances
@@ -250,7 +250,7 @@
         <p>
           Linked instances must be running the same model family — KV layouts
           differ across architectures. More on the <a
-            class="text-exo-yellow underline underline-offset-2 hover:text-exo-yellow-darker transition-colors"
+            class="text-wEXO-yellow underline underline-offset-2 hover:text-wEXO-yellow-darker transition-colors"
             href="https://blog.exolabs.net/nvidia-dgx-spark/"
             target="_blank"
             rel="noreferrer noopener">blog</a
@@ -270,7 +270,7 @@
 
   <section class="mt-12">
     <h2
-      class="text-exo-yellow text-xs font-mono tracking-widest uppercase m-0 mb-3"
+      class="text-wEXO-yellow text-xs font-mono tracking-widest uppercase m-0 mb-3"
     >
       Existing routes
     </h2>
@@ -278,11 +278,11 @@
     {#if linkRows.length === 0}
       {#if editingLinkId === null}
         <div class="flex items-center justify-between">
-          <p class="text-exo-light-gray italic text-sm m-0">
+          <p class="text-wEXO-light-gray italic text-sm m-0">
             No routes yet. Create one to enable remote prefill.
           </p>
           <button
-            class="px-3 py-1.5 text-xs font-mono tracking-wider uppercase bg-exo-yellow/15 border border-exo-yellow/50 text-exo-yellow hover:bg-exo-yellow/25 hover:border-exo-yellow/80 transition-colors"
+            class="px-3 py-1.5 text-xs font-mono tracking-wider uppercase bg-wEXO-yellow/15 border border-wEXO-yellow/50 text-wEXO-yellow hover:bg-wEXO-yellow/25 hover:border-wEXO-yellow/80 transition-colors"
             onclick={startCreate}
           >
             + New route
@@ -293,7 +293,7 @@
       {#if editingLinkId === null}
         <div class="flex justify-end mb-3">
           <button
-            class="px-3 py-1.5 text-xs font-mono tracking-wider uppercase bg-exo-yellow/15 border border-exo-yellow/50 text-exo-yellow hover:bg-exo-yellow/25 hover:border-exo-yellow/80 transition-colors"
+            class="px-3 py-1.5 text-xs font-mono tracking-wider uppercase bg-wEXO-yellow/15 border border-wEXO-yellow/50 text-wEXO-yellow hover:bg-wEXO-yellow/25 hover:border-wEXO-yellow/80 transition-colors"
             onclick={startCreate}
           >
             + New route
@@ -301,12 +301,12 @@
         </div>
       {/if}
       <div
-        class="bg-exo-dark-gray/60 border border-exo-medium-gray/40 flex flex-col"
+        class="bg-wEXO-dark-gray/60 border border-wEXO-medium-gray/40 flex flex-col"
       >
         {#each linkRows as row (row.linkId)}
           {#if editingLinkId !== row.linkId}
             <article
-              class="p-4 border-b border-exo-light-gray/25 last:border-b-0"
+              class="p-4 border-b border-wEXO-light-gray/25 last:border-b-0"
             >
               {#if row.multiNode}
                 <div
@@ -328,12 +328,12 @@
                 class="grid grid-cols-[1fr_auto_1fr_auto] items-center gap-x-3 gap-y-2"
               >
                 <span
-                  class="inline-block justify-self-start text-[10px] font-mono tracking-widest uppercase px-2 py-0.5 bg-exo-yellow/15 border border-exo-yellow/40 text-exo-yellow"
+                  class="inline-block justify-self-start text-[10px] font-mono tracking-widest uppercase px-2 py-0.5 bg-wEXO-yellow/15 border border-wEXO-yellow/40 text-wEXO-yellow"
                   >Prefill</span
                 >
                 <span></span>
                 <span
-                  class="inline-block justify-self-start text-[10px] font-mono tracking-widest uppercase px-2 py-0.5 bg-exo-medium-gray/40 border border-exo-medium-gray/60 text-foreground"
+                  class="inline-block justify-self-start text-[10px] font-mono tracking-widest uppercase px-2 py-0.5 bg-wEXO-medium-gray/40 border border-wEXO-medium-gray/60 text-foreground"
                   >Decode</span
                 >
                 <span></span>
@@ -343,24 +343,24 @@
                       {@const r = instanceById[id]}
                       {#if r}
                         <li
-                          class="flex items-center gap-2 px-2.5 py-2 bg-exo-medium-gray/20 border border-exo-medium-gray/40"
+                          class="flex items-center gap-2 px-2.5 py-2 bg-wEXO-medium-gray/20 border border-wEXO-medium-gray/40"
                         >
                           <FamilyLogos family={r.family} />
                           <div class="min-w-0 flex-1">
                             <div
-                              class="text-exo-yellow text-xs font-mono truncate"
+                              class="text-wEXO-yellow text-xs font-mono truncate"
                             >
                               {r.baseModel || r.modelId}
                             </div>
                             <div
-                              class="text-exo-light-gray text-[11px] truncate"
+                              class="text-wEXO-light-gray text-[11px] truncate"
                             >
                               {r.nodeNames.join(", ") || "?"}{r.nodeCount > 1
                                 ? ` (${r.nodeCount} nodes)`
                                 : ""}
                             </div>
                             <div
-                              class="text-exo-light-gray/40 text-[10px] font-mono truncate"
+                              class="text-wEXO-light-gray/40 text-[10px] font-mono truncate"
                               title={r.id}
                             >
                               {r.id.slice(0, 8)}
@@ -371,7 +371,10 @@
                     {/each}
                   </ul>
                 </div>
-                <div class="text-exo-yellow/60 text-xl px-2" aria-hidden="true">
+                <div
+                  class="text-wEXO-yellow/60 text-xl px-2"
+                  aria-hidden="true"
+                >
                   →
                 </div>
                 <div class="min-w-0">
@@ -380,24 +383,24 @@
                       {@const r = instanceById[id]}
                       {#if r}
                         <li
-                          class="flex items-center gap-2 px-2.5 py-2 bg-exo-medium-gray/20 border border-exo-medium-gray/40"
+                          class="flex items-center gap-2 px-2.5 py-2 bg-wEXO-medium-gray/20 border border-wEXO-medium-gray/40"
                         >
                           <FamilyLogos family={r.family} />
                           <div class="min-w-0 flex-1">
                             <div
-                              class="text-exo-yellow text-xs font-mono truncate"
+                              class="text-wEXO-yellow text-xs font-mono truncate"
                             >
                               {r.baseModel || r.modelId}
                             </div>
                             <div
-                              class="text-exo-light-gray text-[11px] truncate"
+                              class="text-wEXO-light-gray text-[11px] truncate"
                             >
                               {r.nodeNames.join(", ") || "?"}{r.nodeCount > 1
                                 ? ` (${r.nodeCount} nodes)`
                                 : ""}
                             </div>
                             <div
-                              class="text-exo-light-gray/40 text-[10px] font-mono truncate"
+                              class="text-wEXO-light-gray/40 text-[10px] font-mono truncate"
                               title={r.id}
                             >
                               {r.id.slice(0, 8)}
@@ -410,7 +413,7 @@
                 </div>
                 <div class="flex gap-2 pl-3">
                   <button
-                    class="px-2 py-0.5 text-[11px] font-mono tracking-wider uppercase bg-exo-medium-gray/30 border border-exo-medium-gray/60 rounded text-foreground hover:border-exo-yellow/60 hover:text-exo-yellow disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    class="px-2 py-0.5 text-[11px] font-mono tracking-wider uppercase bg-wEXO-medium-gray/30 border border-wEXO-medium-gray/60 rounded text-foreground hover:border-wEXO-yellow/60 hover:text-wEXO-yellow disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     onclick={() => startEdit(row)}
                     disabled={editingLinkId !== null}
                   >
@@ -433,22 +436,22 @@
 
   {#if editingLinkId !== null && instanceRows.length === 0}
     <section
-      class="mt-6 bg-exo-dark-gray/60 border border-exo-yellow/30 px-4 py-2.5 flex items-center justify-between gap-3"
+      class="mt-6 bg-wEXO-dark-gray/60 border border-wEXO-yellow/30 px-4 py-2.5 flex items-center justify-between gap-3"
     >
-      <span class="text-exo-light-gray italic text-sm font-mono"
+      <span class="text-wEXO-light-gray italic text-sm font-mono"
         >No instances available.</span
       >
       <button
-        class="px-3 py-1 text-xs font-mono tracking-wider uppercase bg-exo-medium-gray/30 border border-exo-medium-gray/60 rounded text-foreground hover:border-exo-yellow/60 transition-colors"
+        class="px-3 py-1 text-xs font-mono tracking-wider uppercase bg-wEXO-medium-gray/30 border border-wEXO-medium-gray/60 rounded text-foreground hover:border-wEXO-yellow/60 transition-colors"
         onclick={cancelEdit}
       >
         Cancel
       </button>
     </section>
   {:else if editingLinkId !== null}
-    <section class="mt-6 bg-exo-dark-gray/60 border border-exo-yellow/30 p-5">
+    <section class="mt-6 bg-wEXO-dark-gray/60 border border-wEXO-yellow/30 p-5">
       <h2
-        class="text-exo-yellow text-xs font-mono tracking-widest uppercase m-0 mb-3"
+        class="text-wEXO-yellow text-xs font-mono tracking-widest uppercase m-0 mb-3"
       >
         {editingLinkId === "new" ? "New route" : "Edit route"}
       </h2>
@@ -474,9 +477,9 @@
         </div>
       {/if}
 
-      <p class="text-exo-light-gray text-xs mb-4">
+      <p class="text-wEXO-light-gray text-xs mb-4">
         Pick a role for each instance:
-        <span class="text-exo-yellow">Prefill</span>
+        <span class="text-wEXO-yellow">Prefill</span>
         serves KV cache,
         <span class="text-foreground">Decode</span> consumes it.
       </p>
@@ -489,24 +492,24 @@
           <div
             class="border p-3 flex flex-col gap-2.5 transition-colors {role ===
             'prefill'
-              ? 'border-exo-yellow/60 bg-exo-dark-gray/60'
+              ? 'border-wEXO-yellow/60 bg-wEXO-dark-gray/60'
               : role === 'decode'
-                ? 'border-exo-light-gray/60 bg-exo-dark-gray/60'
-                : 'border-exo-medium-gray/40 bg-exo-dark-gray/40'}"
+                ? 'border-wEXO-light-gray/60 bg-wEXO-dark-gray/60'
+                : 'border-wEXO-medium-gray/40 bg-wEXO-dark-gray/40'}"
           >
             <div class="flex items-center gap-2">
               <FamilyLogos family={row.family} />
               <div class="min-w-0 flex-1">
-                <div class="text-exo-yellow text-xs font-mono truncate">
+                <div class="text-wEXO-yellow text-xs font-mono truncate">
                   {row.baseModel || row.modelId}
                 </div>
-                <div class="text-exo-light-gray text-[11px] truncate">
+                <div class="text-wEXO-light-gray text-[11px] truncate">
                   {row.nodeNames.join(", ") || "?"}{row.nodeCount > 1
                     ? ` (${row.nodeCount} nodes)`
                     : ""}
                 </div>
                 <div
-                  class="text-exo-light-gray/40 text-[10px] font-mono truncate"
+                  class="text-wEXO-light-gray/40 text-[10px] font-mono truncate"
                   title={row.id}
                 >
                   {row.id.slice(0, 8)}
@@ -521,13 +524,13 @@
               {/if}
             </div>
             <div
-              class="flex rounded-md overflow-hidden border border-exo-light-gray/40 divide-x divide-exo-light-gray/40"
+              class="flex rounded-md overflow-hidden border border-wEXO-light-gray/40 divide-x divide-wEXO-light-gray/40"
             >
               <button
                 class="flex-1 px-2 py-1 text-[11px] font-mono tracking-wider uppercase transition-colors {role ===
                 'prefill'
-                  ? 'bg-exo-yellow/20 text-exo-yellow'
-                  : 'bg-transparent text-white/80 hover:text-exo-yellow'}"
+                  ? 'bg-wEXO-yellow/20 text-wEXO-yellow'
+                  : 'bg-transparent text-white/80 hover:text-wEXO-yellow'}"
                 onclick={() =>
                   setRole(row.id, role === "prefill" ? "none" : "prefill")}
                 >Prefill</button
@@ -535,7 +538,7 @@
               <button
                 class="flex-1 px-2 py-1 text-[11px] font-mono tracking-wider uppercase transition-colors {role ===
                 'decode'
-                  ? 'bg-exo-medium-gray/50 text-foreground'
+                  ? 'bg-wEXO-medium-gray/50 text-foreground'
                   : 'bg-transparent text-white/80 hover:text-foreground'}"
                 onclick={() =>
                   setRole(row.id, role === "decode" ? "none" : "decode")}
@@ -548,14 +551,14 @@
 
       <div class="flex gap-2 mt-5 justify-end">
         <button
-          class="px-3 py-1.5 text-xs font-mono tracking-wider uppercase bg-exo-yellow/15 border border-exo-yellow/50 text-exo-yellow hover:bg-exo-yellow/25 hover:border-exo-yellow/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          class="px-3 py-1.5 text-xs font-mono tracking-wider uppercase bg-wEXO-yellow/15 border border-wEXO-yellow/50 text-wEXO-yellow hover:bg-wEXO-yellow/25 hover:border-wEXO-yellow/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           onclick={save}
           disabled={!canSave}
         >
           {saving ? "Saving..." : "Save route"}
         </button>
         <button
-          class="px-3 py-1.5 text-xs font-mono tracking-wider uppercase bg-exo-medium-gray/30 border border-exo-medium-gray/60 text-foreground hover:border-exo-yellow/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          class="px-3 py-1.5 text-xs font-mono tracking-wider uppercase bg-wEXO-medium-gray/30 border border-wEXO-medium-gray/60 text-foreground hover:border-wEXO-yellow/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           onclick={cancelEdit}
           disabled={saving}
         >

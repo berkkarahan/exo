@@ -470,7 +470,7 @@ def launcher_status(
 
 
 def api_is_reachable(
-    url: str = "http://127.0.0.1:52415/state",
+    url: str = "http://127.0.0.1:52416/state",
     timeout_seconds: float = 0.2,
 ) -> bool:
     """Return whether the local exo API answered.

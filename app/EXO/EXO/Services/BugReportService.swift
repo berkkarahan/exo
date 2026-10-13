@@ -36,7 +36,7 @@ struct BugReportService {
     }
 
     func sendReport(
-        baseURL: URL = URL(string: "http://127.0.0.1:52415")!,
+        baseURL: URL = URL(string: "http://127.0.0.1:52416")!,
         now: Date = Date(),
         isManual: Bool = false,
         userDescription: String? = nil
@@ -156,7 +156,7 @@ struct BugReportService {
 
     private func readAllLogs() -> [(path: String, data: Data)] {
         let dir = URL(fileURLWithPath: NSHomeDirectory())
-            .appendingPathComponent(".exo")
+            .appendingPathComponent(".wexo")
             .appendingPathComponent("exo_log")
         var results: [(path: String, data: Data)] = []
 
@@ -172,7 +172,7 @@ struct BugReportService {
 
     private func readAllEventLogs() -> [(path: String, data: Data)] {
         let eventLogDir = URL(fileURLWithPath: NSHomeDirectory())
-            .appendingPathComponent(".exo")
+            .appendingPathComponent(".wexo")
             .appendingPathComponent("event_log")
         var results: [(path: String, data: Data)] = []
 

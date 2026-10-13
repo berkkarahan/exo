@@ -4,7 +4,7 @@
 
 import { browser } from "$app/environment";
 
-const RECENTS_KEY = "exo-recent-models";
+const RECENTS_KEY = "wEXO-recent-models";
 const MAX_RECENT_MODELS = 20;
 
 interface RecentEntry {

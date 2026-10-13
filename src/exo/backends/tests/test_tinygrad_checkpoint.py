@@ -176,7 +176,9 @@ def test_gguf_load_realizes_one_layer_and_skips_the_other(
         seen.append(start)
         return original(path, start, length, element_count, ggml_type)
 
-    def use_temporary_directory(model_id: ModelId) -> Path:
+    def use_temporary_directory(
+        model_id: ModelId, card: ModelCard | None = None
+    ) -> Path:
         _ = model_id
         return tmp_path
 
@@ -213,7 +215,9 @@ def test_wrong_gguf_query_shape_is_rejected_before_the_shard_is_stored(
 
     _write_llama_gguf(tmp_path / "weights.gguf", query_columns=8)
 
-    def use_temporary_directory(model_id: ModelId) -> Path:
+    def use_temporary_directory(
+        model_id: ModelId, card: ModelCard | None = None
+    ) -> Path:
         _ = model_id
         return tmp_path
 

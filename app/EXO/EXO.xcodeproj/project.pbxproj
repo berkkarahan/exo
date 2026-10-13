@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		E0140D402ED1F909001F3171 /* exo in Resources */ = {isa = PBXBuildFile; fileRef = E0140D3F2ED1F909001F3171 /* exo */; };
+		E0140D402ED1F909001F3171 /* wexo in Resources */ = {isa = PBXBuildFile; fileRef = E0140D3F2ED1F909001F3171 /* wexo */; };
 		E0A1B1002F5A000100000003 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = E0A1B1002F5A000100000002 /* Sparkle */; };
 /* End PBXBuildFile section */
 
@@ -32,7 +32,7 @@
 		E0140D0F2ED1F79A001F3171 /* EXO.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = EXO.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E0140D202ED1F79B001F3171 /* EXOTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EXOTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E0140D2A2ED1F79B001F3171 /* EXOUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EXOUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		E0140D3F2ED1F909001F3171 /* exo */ = {isa = PBXFileReference; lastKnownFileType = folder; name = exo; path = ../../dist/exo; sourceTree = "<group>"; };
+		E0140D3F2ED1F909001F3171 /* wexo */ = {isa = PBXFileReference; lastKnownFileType = folder; name = wexo; path = ../../dist/wexo; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -224,7 +224,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E0140D402ED1F909001F3171 /* exo in Resources */,
+				E0140D402ED1F909001F3171 /* wexo in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

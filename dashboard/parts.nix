@@ -92,17 +92,17 @@
     in
     {
       # Extract just the static site from the full build
-      packages.dashboard = pkgs.runCommand "exo-dashboard" { } ''
+      packages.dashboard = pkgs.runCommand "wEXO-dashboard" { } ''
         cp -r ${dashboardFull}/build $out
       '';
 
       # Prettier with svelte plugin for treefmt
       # Uses dashboardDeps instead of dashboardFull to avoid rebuilding on source changes
       packages.prettier-svelte = pkgs.writeShellScriptBin "prettier-svelte" ''
-        export NODE_PATH="${dashboardDeps}/lib/node_modules/exo-dashboard/node_modules"
+        export NODE_PATH="${dashboardDeps}/lib/node_modules/wEXO-dashboard/node_modules"
         exec ${pkgs.nodejs}/bin/node \
-          ${dashboardDeps}/lib/node_modules/exo-dashboard/node_modules/prettier/bin/prettier.cjs \
-          --plugin "${dashboardDeps}/lib/node_modules/exo-dashboard/node_modules/prettier-plugin-svelte/plugin.js" \
+          ${dashboardDeps}/lib/node_modules/wEXO-dashboard/node_modules/prettier/bin/prettier.cjs \
+          --plugin "${dashboardDeps}/lib/node_modules/wEXO-dashboard/node_modules/prettier-plugin-svelte/plugin.js" \
           "$@"
       '';
     };

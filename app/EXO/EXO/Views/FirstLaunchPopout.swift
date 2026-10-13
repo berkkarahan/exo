@@ -7,7 +7,7 @@ import SwiftUI
 final class FirstLaunchPopout {
     private var popover: NSPopover?
     private var countdownTask: Task<Void, Never>?
-    private static let dashboardURL = "http://localhost:52415/"
+    private static let dashboardURL = "http://localhost:52416/"
 
     /// Called when the user completes onboarding (clicks Open Dashboard or dismisses).
     var onComplete: (() -> Void)?
@@ -136,7 +136,7 @@ private struct WelcomeCalloutView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top) {
-                Text("EXO is running")
+                Text("wEXO is running")
                     .font(.system(.headline, design: .rounded))
                     .fontWeight(.semibold)
                     .foregroundColor(.primary)

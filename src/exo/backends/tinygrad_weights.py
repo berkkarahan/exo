@@ -285,7 +285,7 @@ def model_directory_for_shard(shard: PipelineShardMetadata) -> Path:
         TinygradWeightError: The runner entrypoint handles this by publishing
             ``RunnerTerminationError`` when the download directory is missing.
     """
-    directory = build_model_path(shard.model_card.model_id)
+    directory = build_model_path(shard.model_card.model_id, shard.model_card)
     if not directory.is_dir():
         raise TinygradWeightError(
             f"Model directory for {shard.model_card.model_id} is not available at {directory}"
