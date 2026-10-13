@@ -7,7 +7,7 @@ let
 
   mkPythonSet = { pkgs, lib, self', members }:
     let
-      inherit (pkgs.stdenv.hostPlatform) isLinux isx86_64;
+      inherit (pkgs.stdenv.hostPlatform) isLinux isDarwin isx86_64;
       inherit (pkgs.config) cudaSupport;
       inherit (pkgs) cudaPackages;
       libmlx_source =
