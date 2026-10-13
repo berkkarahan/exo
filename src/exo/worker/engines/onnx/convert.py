@@ -88,9 +88,7 @@ def _build_with_onnxruntime_genai(
     cache_dir: str,
     **extra_options: bool | int,
 ) -> None:
-    from onnxruntime_genai.models.builder import (  # pyright: ignore[reportMissingTypeStubs]
-        create_model,  # pyright: ignore[reportUnknownVariableType]
-    )
+    from onnxruntime_genai.models.builder import create_model
 
     create_model(
         model_name,
