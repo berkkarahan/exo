@@ -57,17 +57,15 @@
         OPENSSL_NO_VENDOR = "1";
         MATURIN_NO_INSTALL_RUST = "1";
 
+        # Nix build sandboxes deny sockets; skip the live networking test there.
+        cargoExtraArgs = "--workspace --features networking/nix-sandbox";
+
         # Required for pyo3 tests to find libpython
         LD_LIBRARY_PATH = lib.makeLibraryPath [ pkgs.python313 ];
       };
 
       # Build dependencies once for caching
-      cargoArtifacts = craneLib.buildDepsOnly (
-        commonArgs
-        // {
-          cargoExtraArgs = "--workspace --features networking/nix-sandbox";
-        }
-      );
+      cargoArtifacts = craneLib.buildDepsOnly commonArgs;
     in
     {
       # Export toolchain for use in treefmt and devShell
@@ -124,7 +122,6 @@
             commonArgs
             // {
               inherit cargoArtifacts;
-              cargoExtraArgs = "--workspace --features networking/nix-sandbox";
             }
           );
           # Run tests with nextest
@@ -132,7 +129,6 @@
             commonArgs
             // {
               inherit cargoArtifacts;
-              cargoExtraArgs = "--workspace --features networking/nix-sandbox";
             }
           );
 
@@ -141,7 +137,6 @@
             commonArgs
             // {
               inherit cargoArtifacts;
-              cargoExtraArgs = "--workspace";
             }
           );
         };
