@@ -48,6 +48,6 @@ done
 
 for host; do
   echo "Waiting for $host..."
-  until curl -sf "http://$host:52415/models" &>/dev/null; do sleep 1; done
+  until curl -sf "http://$host:52416/models" &>/dev/null; do sleep 1; done
 done
 wait

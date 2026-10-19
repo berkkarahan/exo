@@ -14,7 +14,7 @@ Svelte 5 + TypeScript in `dashboard/`. Build output goes to `dashboard/build/` a
 cd dashboard && npm install && npm run build && cd ..
 # or: just build-dashboard
 
-# Start wEXO (serves dashboard + API at http://localhost:52415)
+# Start wEXO (serves dashboard + API at http://localhost:52416)
 uv run exo &
 sleep 8
 ```
@@ -37,7 +37,7 @@ const { chromium } = require('playwright');
 (async () => {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
-  await page.goto('http://localhost:52415', { waitUntil: 'networkidle' });
+  await page.goto('http://localhost:52416', { waitUntil: 'networkidle' });
   await page.waitForTimeout(2000);
 
   // Seed test data in localStorage if needed (e.g. recent models)

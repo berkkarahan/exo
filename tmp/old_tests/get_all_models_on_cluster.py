@@ -13,7 +13,7 @@ ts = subprocess.run(
 ip = next(
     (sl[0] for line in ts if len(sl := line.split()) >= 2 if sl[1] == h), None
 ) or sys.exit(f"{h} not found in tailscale")
-with urlopen(f"http://{ip}:52415/state", timeout=5) as r:
+with urlopen(f"http://{ip}:52416/state", timeout=5) as r:
     data = json.loads(r.read()).get("downloads", {})
 
 

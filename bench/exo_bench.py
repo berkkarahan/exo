@@ -10,7 +10,7 @@ Tests whether models correctly:
 
 Start exo with a model first, then run:
     uv run python tool_call_eval.py --model <model-id>
-    uv run python tool_call_eval.py --model <model-id> --host 10.0.0.5 --port 52415
+    uv run python tool_call_eval.py --model <model-id> --host 10.0.0.5 --port 52416
     uv run python tool_call_eval.py --model <model-id> --repeat 3
     uv run python tool_call_eval.py --model <model-id> --scenarios weather_simple calculator_multi_turn
 """

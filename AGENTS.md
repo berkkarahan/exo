@@ -12,7 +12,7 @@ exo is a distributed AI inference system that connects multiple devices into a c
 # Build the dashboard (required before running exo)
 cd dashboard && npm install && npm run build && cd ..
 
-# Run exo (starts both master and worker with API at http://localhost:52415)
+# Run exo (starts both master and worker with API at http://localhost:52416)
 uv run exo
 
 # Run with verbose logging
@@ -127,7 +127,7 @@ Tests use pytest-asyncio with `asyncio_mode = "auto"`. Tests are in `tests/` sub
 # Build the dashboard (must be done before running exo)
 cd dashboard && npm install && npm run build && cd ..
 
-# Start exo (serves the dashboard at http://localhost:52415)
+# Start exo (serves the dashboard at http://localhost:52416)
 uv run exo &
 sleep 8  # Wait for server to start
 ```
@@ -148,7 +148,7 @@ const { chromium } = require('playwright');
 (async () => {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
-  await page.goto('http://localhost:52415', { waitUntil: 'networkidle' });
+  await page.goto('http://localhost:52416', { waitUntil: 'networkidle' });
   await page.waitForTimeout(2000);
 
   // Inject test data into localStorage if needed (e.g., recent models)

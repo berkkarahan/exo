@@ -71,7 +71,7 @@ struct EXOApp: App {
                 .environmentObject(bugReportWindowController)
         } label: {
             menuBarIcon
-                .onReceive(controller.$isFirstLaunchReady) { ready in
+                .onReceive(controller.$isFirstLaunchReady) { [weak controller] ready in
                     if ready {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
                             self.firstLaunchPopout.onComplete = { [weak controller] in
@@ -259,7 +259,8 @@ private final class ExoNotificationDelegate: NSObject, UNUserNotificationCenterD
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
-        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) ->
+        withCompletionHandler completionHandler:
+            @escaping (UNNotificationPresentationOptions) ->
             Void
     ) {
         completionHandler([.banner, .list, .sound])

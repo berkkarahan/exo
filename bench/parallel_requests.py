@@ -238,7 +238,7 @@ def main() -> None:
     parser.add_argument(
         "--host", required=True, help="Hostname of the exo node (e.g. s1)"
     )
-    parser.add_argument("--port", type=int, default=52415, help="Port (default: 52415)")
+    parser.add_argument("--port", type=int, default=52416, help="Port (default: 52416)")
     parser.add_argument(
         "--stdout", action="store_true", help="Print full responses after completion"
     )

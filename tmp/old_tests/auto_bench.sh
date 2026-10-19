@@ -40,7 +40,7 @@ done
 
 for host; do
   echo "Waiting for $host..." 1>&2
-  until curl -sf "http://$host:52415/models" &>/dev/null; do sleep 1; done
+  until curl -sf "http://$host:52416/models" &>/dev/null; do sleep 1; done
 done
 
 echo "Waiting 30s for cluster setup" 1>&2

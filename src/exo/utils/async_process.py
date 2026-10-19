@@ -354,7 +354,9 @@ if sys.platform == "win32":
         # with the 3-tuple size>0 shape, so narrow by length to satisfy the
         # type checker instead of indexing blindly.
         if len(peek_result) != 2:
-            raise RuntimeError(f"unexpected PeekNamedPipe(size=0) result: {peek_result!r}")
+            raise RuntimeError(
+                f"unexpected PeekNamedPipe(size=0) result: {peek_result!r}"
+            )
         available, _bytes_left_this_message = peek_result
         if available == 0:
             return None

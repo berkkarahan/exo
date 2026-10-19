@@ -7,7 +7,7 @@
 #   uv run python bench/prefill_decode_bench.py --config bench/prefill-decode.toml
 
 host = "james"
-port = 52415
+port = 52416
 timeout = 7200.0
 settle_timeout = 60.0
 

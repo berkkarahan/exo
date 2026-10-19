@@ -98,6 +98,7 @@ def _keep_device_name(device_name: TinygradDeviceName) -> TinygradDeviceName:
 def test_engine_generation_requires_a_loaded_shard(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    pytest.importorskip("tinygrad")
     monkeypatch.setattr(
         "exo.backends.tinygrad_engine.assign_tinygrad_default_device",
         _keep_device_name,

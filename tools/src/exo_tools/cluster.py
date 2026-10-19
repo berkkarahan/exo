@@ -63,7 +63,7 @@ class ClusterInfo:
 
     primary_host: str = ""
     _host: str = field(init=False, repr=False, default="")
-    _port: int = field(init=False, repr=False, default=52415)
+    _port: int = field(init=False, repr=False, default=52416)
 
     def __post_init__(self) -> None:
         if not self.primary_host:
@@ -71,7 +71,7 @@ class ClusterInfo:
         url = self.api_url.replace("http://", "").replace("https://", "")
         parts = url.split(":")
         self._host = parts[0]
-        self._port = int(parts[1]) if len(parts) > 1 else 52415
+        self._port = int(parts[1]) if len(parts) > 1 else 52416
 
     def make_client(self, timeout_s: float = 7200.0) -> ExoClient:
         return ExoClient(self._host, self._port, timeout_s=timeout_s)
@@ -239,5 +239,5 @@ def make_client_from_url(url: str, timeout_s: float = 7200.0) -> ExoClient:
     url_clean = url.replace("http://", "").replace("https://", "")
     parts = url_clean.split(":")
     host = parts[0]
-    port = int(parts[1]) if len(parts) > 1 else 52415
+    port = int(parts[1]) if len(parts) > 1 else 52416
     return ExoClient(host, port, timeout_s=timeout_s)

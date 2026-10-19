@@ -68,7 +68,7 @@ exo includes a built-in dashboard for managing your cluster and chatting with mo
 
 ## Quick Start
 
-Devices running exo automatically discover each other, without needing any manual configuration. Each device provides an API and a dashboard for interacting with your cluster (runs at `http://localhost:52415`).
+Devices running exo automatically discover each other, without needing any manual configuration. Each device provides an API and a dashboard for interacting with your cluster (runs at `http://localhost:52416`).
 
 There are two ways to run exo:
 
@@ -134,7 +134,7 @@ uv sync --extra mlx
 uv run exo
 ```
 
-This starts the exo dashboard and API at http://localhost:52415/
+This starts the exo dashboard and API at http://localhost:52416/
 
 
 *Please view the section on RDMA to enable this feature on MacOS >=26.2!*
@@ -196,7 +196,7 @@ uv sync --extra mlx-cpu
 uv run exo
 ```
 
-This starts the exo dashboard and API at http://localhost:52415/
+This starts the exo dashboard and API at http://localhost:52416/
 
 **Important note for Linux users:** Currently, exo runs on CPU on Linux. GPU support for Linux platforms is under development. If you'd like to see support for your specific Linux hardware, please [search for existing feature requests](https://github.com/exo-explore/exo/issues) or create a new one.
 
@@ -314,7 +314,7 @@ exo supports several environment variables for configuration:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `EXO_DEFAULT_MODELS_DIR` | Default directory for model downloads and caches. Always first in the writable dirs list. | `~/.local/share/exo/models` (Linux) or `~/.exo/models` (macOS) |
+| `EXO_DEFAULT_MODELS_DIR` | Default directory for model downloads and caches. Always first in the writable dirs list. | `~/.local/share/exo/models` (Linux) or `~/.wexo/models` (macOS) |
 | `EXO_MODELS_DIRS` | Colon-separated additional writable directories for model downloads. Checked in order after the default; first with enough free space is used. | None |
 | `EXO_MODELS_READ_ONLY_DIRS` | Colon-separated read-only directories to search for pre-downloaded models (e.g., NFS mounts, shared storage). Models here cannot be deleted. | None |
 | `EXO_OFFLINE` | Run without internet connection (uses only local models) | `false` |
@@ -362,7 +362,7 @@ If you prefer to interact with exo via the API, here is an example creating an i
 The `/instance/previews` endpoint will preview all valid placements for your model.
 
 ```bash
-curl "http://localhost:52415/instance/previews?model_id=llama-3.2-1b"
+curl "http://localhost:52416/instance/previews?model_id=llama-3.2-1b"
 ```
 
 Sample response:
@@ -387,7 +387,7 @@ This will return all valid placements for this model. Pick a placement that you 
 To pick the first one, pipe into `jq`:
 
 ```bash
-curl "http://localhost:52415/instance/previews?model_id=llama-3.2-1b" | jq -c '.previews[] | select(.error == null) | .instance' | head -n1
+curl "http://localhost:52416/instance/previews?model_id=llama-3.2-1b" | jq -c '.previews[] | select(.error == null) | .instance' | head -n1
 ```
 
 ---
@@ -397,7 +397,7 @@ curl "http://localhost:52415/instance/previews?model_id=llama-3.2-1b" | jq -c '.
 Send a POST to `/instance` with your desired placement in the `instance` field (the full payload must match types as in `CreateInstanceParams`), which you can copy from step 1:
 
 ```bash
-curl -X POST http://localhost:52415/instance \
+curl -X POST http://localhost:52416/instance \
   -H 'Content-Type: application/json' \
   -d '{
     "instance": {...}
@@ -418,7 +418,7 @@ This command is asynchronous. Before sending inference requests, wait until the
 API sees the new instance for this model:
 
 ```bash
-curl -N "http://localhost:52415/instance/await?model_id=mlx-community/Llama-3.2-1B-Instruct-4bit"
+curl -N "http://localhost:52416/instance/await?model_id=mlx-community/Llama-3.2-1B-Instruct-4bit"
 ```
 
 The endpoint returns an SSE stream. A successful wait emits a message with
@@ -433,7 +433,7 @@ bound the wait.
 Now, make a POST to `/v1/chat/completions` (the same format as OpenAI's API):
 
 ```bash
-curl -N -X POST http://localhost:52415/v1/chat/completions \
+curl -N -X POST http://localhost:52416/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{
     "model": "mlx-community/Llama-3.2-1B-Instruct-4bit",
@@ -451,7 +451,7 @@ curl -N -X POST http://localhost:52415/v1/chat/completions \
 When you're done, delete the instance by its ID (find it via `/state` or `/instance` endpoints):
 
 ```bash
-curl -X DELETE http://localhost:52415/instance/YOUR_INSTANCE_ID
+curl -X DELETE http://localhost:52416/instance/YOUR_INSTANCE_ID
 ```
 
 ### Claude Messages API Compatibility
@@ -459,7 +459,7 @@ curl -X DELETE http://localhost:52415/instance/YOUR_INSTANCE_ID
 Use the Claude Messages API format with the `/v1/messages` endpoint:
 
 ```bash
-curl -N -X POST http://localhost:52415/v1/messages \
+curl -N -X POST http://localhost:52416/v1/messages \
   -H 'Content-Type: application/json' \
   -d '{
     "model": "mlx-community/Llama-3.2-1B-Instruct-4bit",
@@ -476,7 +476,7 @@ curl -N -X POST http://localhost:52415/v1/messages \
 Use the OpenAI Responses API format with the `/v1/responses` endpoint:
 
 ```bash
-curl -N -X POST http://localhost:52415/v1/responses \
+curl -N -X POST http://localhost:52416/v1/responses \
   -H 'Content-Type: application/json' \
   -d '{
     "model": "mlx-community/Llama-3.2-1B-Instruct-4bit",
@@ -493,7 +493,7 @@ exo supports Ollama API endpoints for compatibility with tools like OpenWebUI:
 
 ```bash
 # Ollama chat
-curl -X POST http://localhost:52415/ollama/api/chat \
+curl -X POST http://localhost:52416/ollama/api/chat \
   -H 'Content-Type: application/json' \
   -d '{
     "model": "mlx-community/Llama-3.2-1B-Instruct-4bit",
@@ -504,7 +504,7 @@ curl -X POST http://localhost:52415/ollama/api/chat \
   }'
 
 # List models (Ollama format)
-curl http://localhost:52415/ollama/api/tags
+curl http://localhost:52416/ollama/api/tags
 ```
 
 ### Custom Model Loading from HuggingFace
@@ -512,7 +512,7 @@ curl http://localhost:52415/ollama/api/tags
 You can add custom models from the HuggingFace hub:
 
 ```bash
-curl -X POST http://localhost:52415/models/add \
+curl -X POST http://localhost:52416/models/add \
   -H 'Content-Type: application/json' \
   -d '{
     "model_id": "mlx-community/my-custom-model"
@@ -525,10 +525,10 @@ Custom models requiring `trust_remote_code` in their configuration must be expli
 
 **Other useful API endpoints*:**
 
-- List all models: `curl http://localhost:52415/models`
-- List downloaded models only: `curl http://localhost:52415/models?status=downloaded`
-- Search HuggingFace: `curl "http://localhost:52415/models/search?query=llama&limit=10"`
-- Inspect instance IDs and deployment state: `curl http://localhost:52415/state`
+- List all models: `curl http://localhost:52416/models`
+- List downloaded models only: `curl http://localhost:52416/models?status=downloaded`
+- Search HuggingFace: `curl "http://localhost:52416/models/search?query=llama&limit=10"`
+- Inspect instance IDs and deployment state: `curl http://localhost:52416/state`
 
 For further details, see:
 
