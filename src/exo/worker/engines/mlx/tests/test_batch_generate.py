@@ -13,10 +13,14 @@ Uses random weights — no model download required.
 from pathlib import Path
 from typing import cast
 
+import pytest
+
+pytest.importorskip("mlx.core")
+pytest.importorskip("mlx_lm")
+
 import mlx.core as mx
 import mlx.nn as nn
 import mlx.utils
-import pytest
 from mlx_lm.generate import _merge_caches
 from mlx_lm.sample_utils import make_sampler
 from mlx_lm.tokenizer_utils import TokenizerWrapper

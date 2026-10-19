@@ -23,7 +23,6 @@ pub fn is_valid_zid(identity: &str) -> bool {
 pub fn cfg(identity: &str, listen_port: u16) -> Result<zenoh::Config> {
     assert!(is_valid_zid(identity));
     assert!(identity.len() <= 32);
-    assert!(listen_port != 0, "must used defined listen port");
     let mut cfg = zenoh::Config::default();
     // todo: cleanup
     cfg.insert_json5("id", &format!("\"{identity}\""))?;
@@ -57,7 +56,6 @@ pub async fn open(
     listen_port: u16,
     discovery_service_port: u16,
 ) -> Result<Session> {
-    assert!(listen_port != 0, "must used defined listen port");
     let namespace: [u8; 8] = {
         blake3::hash(namespace.as_bytes()).as_bytes()[..8]
             .try_into()
@@ -71,6 +69,21 @@ pub async fn open(
         .await?;
     let z = zenoh::session::init(runtime.clone().into()).await?;
     runtime.start().await?;
+    let listen_port = if listen_port == 0 {
+        z.info()
+            .locators()
+            .await
+            .iter()
+            .find_map(port_from_locator)
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::AddrNotAvailable,
+                    "Zenoh did not report its dynamically assigned TCP listener port",
+                )
+            })?
+    } else {
+        listen_port
+    };
     let mut discovery =
         Discovery::new(z.zid(), namespace, listen_port, discovery_service_port).await?;
     let _jh = Arc::new(AbortOnDrop(tokio::task::spawn(async move {
@@ -102,6 +115,12 @@ pub async fn open(
     Ok(Session { z, _jh })
 }
 
+fn port_from_locator(locator: &Locator) -> Option<u16> {
+    let address = locator.as_str().strip_prefix("tcp/")?;
+    let (_, port) = address.rsplit_once(':')?;
+    port.parse().ok()
+}
+
 struct AbortOnDrop(JoinHandle<()>);
 impl Drop for AbortOnDrop {
     fn drop(&mut self) {
@@ -113,4 +132,52 @@ impl Drop for AbortOnDrop {
 pub struct Session {
     pub z: ZSession,
     _jh: Arc<AbortOnDrop>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::port_from_locator;
+    use zenoh::config::Locator;
+
+    #[test]
+    fn reads_dynamic_tcp_port_from_ipv6_locator() {
+        let locator = Locator::new("tcp", "[::]:49152", "").unwrap();
+        assert_eq!(port_from_locator(&locator), Some(49152));
+    }
+
+    #[test]
+    fn ignores_non_tcp_or_malformed_locators() {
+        let udp = Locator::new("udp", "127.0.0.1:49152", "").unwrap();
+        let malformed = Locator::new("tcp", "not-a-socket", "").unwrap();
+        assert_eq!(port_from_locator(&udp), None);
+        assert_eq!(port_from_locator(&malformed), None);
+    }
+
+    #[test]
+    fn config_accepts_an_ephemeral_listener_port() {
+        assert!(super::cfg("11111111111111111111111111111111", 0).is_ok());
+    }
+
+    // Nix builds deny sockets; CI runs this integration test outside the sandbox.
+    #[cfg_attr(
+        feature = "nix-sandbox",
+        ignore = "TCP sockets are unavailable in Nix builds"
+    )]
+    #[tokio::test(flavor = "multi_thread")]
+    async fn dynamic_listener_port_is_used_for_discovery() {
+        let config = super::cfg("11111111111111111111111111111111", 0).unwrap();
+        let session = super::open(config, "dynamic-port-test", 0, 0)
+            .await
+            .unwrap();
+        let listening_port = session
+            .z
+            .info()
+            .locators()
+            .await
+            .iter()
+            .find_map(port_from_locator)
+            .unwrap();
+        assert_ne!(listening_port, 0);
+        drop(session);
+    }
 }

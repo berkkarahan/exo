@@ -1,1 +1,1 @@
-"""Type stub for the optional, Windows-only onnxruntime_genai package."""
+"""Types for the optional, Windows-only onnxruntime_genai package, imported lazily at runtime."""

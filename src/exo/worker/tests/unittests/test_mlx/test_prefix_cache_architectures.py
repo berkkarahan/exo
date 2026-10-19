@@ -8,9 +8,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
+import pytest
+
+pytest.importorskip("mlx.core")
+pytest.importorskip("mlx_lm")
+
 import mlx.core as mx
 import mlx.nn as nn
-import pytest
 from mlx.utils import tree_flatten, tree_unflatten
 from mlx_lm.tokenizer_utils import TokenizerWrapper
 

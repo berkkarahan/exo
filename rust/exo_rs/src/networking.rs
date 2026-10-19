@@ -70,10 +70,6 @@ impl PyNetworkingHandle {
         listen_port: u16,
         discovery_service_port: u16,
     ) -> PyResult<PyNetworkingHandle> {
-        // todo: zenoh self assigned peers
-        if listen_port == 0 {
-            todo!("cannot listen on port 0 yet");
-        }
         // create communication channels
         let (to_swarm, from_client) = mpsc::channel(1024);
 

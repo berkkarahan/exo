@@ -3,8 +3,12 @@ import time
 from typing import cast
 from unittest.mock import patch
 
-import mlx.core as mx
 import pytest
+
+pytest.importorskip("mlx.core")
+pytest.importorskip("mlx_lm")
+
+import mlx.core as mx
 from mlx_lm.models.cache import KVCache
 from mlx_lm.sample_utils import make_sampler
 
@@ -20,7 +24,7 @@ from exo.worker.engines.mlx.cache import (
 from exo.worker.engines.mlx.generator.generate import mlx_generate, prefill
 from exo.worker.engines.mlx.types import Model
 from exo.worker.engines.mlx.utils_mlx import apply_chat_template
-from exo.worker.tests.unittests.test_mlx.conftest import (
+from exo.worker.tests.unittests.test_mlx.mlx_test_utils import (
     DEFAULT_GPT_OSS_CONFIG,
     DEFAULT_GPT_OSS_MODEL_ID,
 )

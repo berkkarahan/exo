@@ -3,6 +3,9 @@ name = "networking"
 version.workspace = true
 edition.workspace = true
 
+[features]
+nix-sandbox = []
+
 [dependencies]
 async-stream.workspace = true
 futures-lite.workspace = true

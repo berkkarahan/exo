@@ -1,4 +1,4 @@
-"""Type stub for onnxruntime_genai.models.builder."""
+"""Type stub for onnxruntime_genai.models.builder (create_model, used by exo's rank conversion adapter)."""
 
 def create_model(
     model_name: str,

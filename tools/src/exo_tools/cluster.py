@@ -87,7 +87,7 @@ class EcoSession:
         session.stop_all()  # or let atexit handle it
 
     The session registers atexit and signal handlers to ensure cleanup
-    on normal exit, uncaught exceptions, SIGTERM, and SIGHUP. SIGINT
+    on normal exit, uncaught exceptions, SIGTERM, and SIGHUP when available. SIGINT
     is left unhandled so KeyboardInterrupt propagates normally.
     """
 
@@ -98,7 +98,11 @@ class EcoSession:
 
         # Register cleanup handlers
         atexit.register(self.stop_all)
-        for sig in (signal.SIGTERM, signal.SIGHUP):
+        cleanup_signals = [signal.SIGTERM]
+        hangup_signal = getattr(signal, "SIGHUP", None)
+        if hangup_signal is not None:
+            cleanup_signals.append(hangup_signal)
+        for sig in cleanup_signals:
             signal.signal(sig, self._signal_handler)
 
     def _signal_handler(self, signum: int, _frame: object) -> None:

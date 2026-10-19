@@ -57,17 +57,15 @@
         OPENSSL_NO_VENDOR = "1";
         MATURIN_NO_INSTALL_RUST = "1";
 
+        # Nix build sandboxes deny sockets; skip the live networking test there.
+        cargoExtraArgs = "--workspace --features networking/nix-sandbox";
+
         # Required for pyo3 tests to find libpython
         LD_LIBRARY_PATH = lib.makeLibraryPath [ pkgs.python313 ];
       };
 
       # Build dependencies once for caching
-      cargoArtifacts = craneLib.buildDepsOnly (
-        commonArgs
-        // {
-          cargoExtraArgs = "--workspace";
-        }
-      );
+      cargoArtifacts = craneLib.buildDepsOnly commonArgs;
     in
     {
       # Export toolchain for use in treefmt and devShell
@@ -80,6 +78,11 @@
       };
 
       config = {
+        devShells.networking-test = pkgs.mkShell {
+          packages = [ rustToolchain pkgs.pkg-config pkgs.openssl ];
+          OPENSSL_NO_VENDOR = "1";
+        };
+
         packages = {
           # Python bindings wheel via maturin
           exo-rs = craneLib.buildPackage (
@@ -97,7 +100,7 @@
                   --release \
                   --manylinux off \
                   --manifest-path rust/exo_rs/Cargo.toml \
-                  --features "pyo3/extension-module,pyo3/experimental-async" \
+                  --features "pyo3/extension-module,pyo3/experimental-async,networking/nix-sandbox" \
                   --interpreter ${pkgs.python313}/bin/python \
                   --out dist
               '';
@@ -119,7 +122,6 @@
             commonArgs
             // {
               inherit cargoArtifacts;
-              cargoExtraArgs = "--workspace";
             }
           );
           # Run tests with nextest
@@ -127,7 +129,6 @@
             commonArgs
             // {
               inherit cargoArtifacts;
-              cargoExtraArgs = "--workspace";
             }
           );
 
@@ -136,7 +137,6 @@
             commonArgs
             // {
               inherit cargoArtifacts;
-              cargoExtraArgs = "--workspace";
             }
           );
         };

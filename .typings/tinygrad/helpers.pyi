@@ -4,5 +4,4 @@ class _DeviceSelection:
     @property
     def device(self) -> str: ...
 
-
 DEV: _DeviceSelection

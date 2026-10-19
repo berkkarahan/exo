@@ -496,9 +496,9 @@ class Args(FrozenModel):
         parser.add_argument(
             "--zenoh-port",
             type=int,
-            default=52417,
+            default=0,
             dest="zenoh_port",
-            help="Fixed TCP port for zenoh to listen.",
+            help="TCP port for zenoh to listen (0 selects an available port).",
         )
         parser.add_argument(
             "--discovery-port",

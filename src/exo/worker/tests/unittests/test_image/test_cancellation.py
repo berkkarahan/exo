@@ -8,6 +8,10 @@ image runner's cancel_checker integration.
 from collections.abc import Callable
 from unittest.mock import MagicMock
 
+import pytest
+
+pytest.importorskip("mlx.core")
+
 import mlx.core as mx
 
 from exo.shared.types.tasks import CANCEL_ALL_TASKS, TaskId

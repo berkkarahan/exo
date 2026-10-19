@@ -1,15 +1,16 @@
 import asyncio
 import os
+import sys
+from pathlib import Path
 
 import pytest
-from _pytest.capture import CaptureFixture
 from exo_rs import (
     NetworkingHandle,
-    Pidfile,
     FromSwarm,
 )
 
 
+@pytest.mark.slow
 @pytest.mark.asyncio
 async def test_sleep_on_multiple_items() -> None:
     print("PYTHON: starting handle")
@@ -25,11 +26,11 @@ async def test_sleep_on_multiple_items() -> None:
         await h.gossipsub_publish("topic", b"somehting or other")
 
 
-def test_pidfile(capsys: CaptureFixture[str]):
-    with capsys.disabled():
-        print("\nbefore python")
-        scoped_lock_file()
-        print("after python")
+@pytest.mark.skipif(sys.platform == "win32", reason="Pidfile is Unix-only")
+def test_pidfile(tmp_path: Path) -> None:
+    path = tmp_path / "lock.pid"
+    scoped_lock_file(path)
+    assert not path.exists()
 
 
 async def _await_recv(h: NetworkingHandle):
@@ -42,8 +43,10 @@ async def _await_recv(h: NetworkingHandle):
                 print(f"PYTHON: message: {m}")
 
 
-def scoped_lock_file():
-    a = Pidfile("/tmp/lock.pid", 0o0600)
+def scoped_lock_file(path: Path) -> None:
+    from exo_rs import Pidfile
+
+    Pidfile(str(path), 0o0600)
 
 
 if __name__ == "__main__":

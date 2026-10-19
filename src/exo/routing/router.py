@@ -105,11 +105,19 @@ class Router:
         listen_port: int,
         discovery_service_port: int,
     ) -> "Router":
-        return cls(
-            handle=NetworkingHandle.new(
+        try:
+            handle = NetworkingHandle.new(
                 identity, namespace, listen_port, discovery_service_port
             )
-        )
+        except RuntimeError as error:
+            if listen_port == 0:
+                raise
+            raise RuntimeError(
+                f"Could not bind the requested Zenoh TCP port {listen_port}. "
+                "Choose a free port with --zenoh-port or use --zenoh-port 0 "
+                "to let the operating system select one."
+            ) from error
+        return cls(handle=handle)
 
     def __init__(self, handle: NetworkingHandle):
         self.topic_routers: dict[str, TopicRouter[FrozenModel]] = {}

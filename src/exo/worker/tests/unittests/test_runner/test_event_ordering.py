@@ -5,6 +5,9 @@ from typing import Callable
 
 import pytest
 
+pytest.importorskip("mlx.core")
+pytest.importorskip("mlx_lm")
+
 import exo.worker.engines.mlx.builder as mlx_builder
 import exo.worker.runner.llm_inference.batch_generator as mlx_batch_generator
 import exo.worker.runner.llm_inference.model_output_parsers as mlx_model_output_parsers

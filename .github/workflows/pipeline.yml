@@ -15,8 +15,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-26
-            system: aarch64-darwin
           - runner: ubuntu-latest
             system: x86_64-linux
           - runner: ubuntu-24.04-arm
@@ -37,59 +35,19 @@ jobs:
           name: exo
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
 
-      - name: Build Metal packages (macOS only)
-        if: runner.os == 'macOS'
+      - name: Run pytest (Linux)
         run: |
-          # Try to build metal-toolchain first (may succeed via cachix cache hit)
-          if nix build .#metal-toolchain 2>/dev/null; then
-            echo "metal-toolchain built successfully (likely cache hit)"
-          else
-            echo "metal-toolchain build failed, extracting from Xcode..."
+          TEST_ENV=$(nix build '.#exo-test-env' --print-out-paths)
+          export HOME="$RUNNER_TEMP"
+          export EXO_TESTS=1
+          export EXO_DASHBOARD_DIR="$PWD/dashboard/"
+          export EXO_RESOURCES_DIR="$PWD/resources"
+          # Linux MLX wheels are CUDA-only and not importable without a GPU;
+          # MLX tests skip and the non-MLX suite still runs here.
+          "$TEST_ENV/bin/python" -m pytest -q
 
-            NAR_HASH="sha256-ayR5mXN4sZAddwKEG2OszGRF93k9ZFc7H0yi2xbylQw="
-            NAR_NAME="metal-toolchain-17C48.nar"
-
-            # Use RUNNER_TEMP to avoid /tmp symlink issues on macOS
-            WORK_DIR="${RUNNER_TEMP}/metal-work"
-            mkdir -p "$WORK_DIR"
-
-            # Download the Metal toolchain component
-            xcodebuild -downloadComponent MetalToolchain
-
-            # Find and mount the DMG
-            DMG_PATH=$(find /System/Library/AssetsV2/com_apple_MobileAsset_MetalToolchain -name '*.dmg' 2>/dev/null | head -1)
-            if [ -z "$DMG_PATH" ]; then
-              echo "Error: Could not find Metal toolchain DMG"
-              exit 1
-            fi
-
-            echo "Found DMG at: $DMG_PATH"
-            hdiutil attach "$DMG_PATH" -mountpoint "${WORK_DIR}/metal-dmg"
-
-            # Copy the toolchain
-            cp -R "${WORK_DIR}/metal-dmg/Metal.xctoolchain" "${WORK_DIR}/metal-export"
-            hdiutil detach "${WORK_DIR}/metal-dmg"
-
-            # Create NAR and add to store
-            nix nar pack "${WORK_DIR}/metal-export" > "${WORK_DIR}/${NAR_NAME}"
-            STORE_PATH=$(nix store add --mode flat "${WORK_DIR}/${NAR_NAME}")
-            echo "Added NAR to store: $STORE_PATH"
-
-            # Verify the hash matches
-            ACTUAL_HASH=$(nix hash file "${WORK_DIR}/${NAR_NAME}")
-            if [ "$ACTUAL_HASH" != "$NAR_HASH" ]; then
-              echo "Warning: NAR hash mismatch!"
-              echo "Expected: $NAR_HASH"
-              echo "Actual:   $ACTUAL_HASH"
-              echo "The metal-toolchain.nix may need updating"
-            fi
-
-            # Clean up
-            rm -rf "$WORK_DIR"
-
-            # Retry the build now that NAR is in store
-            nix build .#metal-toolchain
-          fi
+      - name: Run live Rust networking test
+        run: nix develop .#networking-test --command cargo test -p networking dynamic_listener_port_is_used_for_discovery -- --nocapture
 
       - name: Build all Nix outputs
         run: |
@@ -103,15 +61,40 @@ jobs:
       - name: Run nix flake check
         run: nix flake check
 
-      - name: Run pytest (macOS only)
-        if: runner.os == 'macOS'
-        run: |
-          # Build the test environment (requires relaxed sandbox for uv2nix on macOS)
-          TEST_ENV=$(nix build '.#exo-test-env' --option sandbox relaxed --print-out-paths)
+  macos-tests:
+    name: Run pytest (macOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Run pytest
+        run: uv run --extra mlx pytest -q
+      - name: Run live Rust networking test
+        run: cargo test -p networking dynamic_listener_port_is_used_for_discovery -- --nocapture
 
-          # Run pytest outside sandbox (needs GPU access for MLX)
-          export HOME="$RUNNER_TEMP"
-          export EXO_TESTS=1
-          export EXO_DASHBOARD_DIR="$PWD/dashboard/" 
-          export EXO_RESOURCES_DIR="$PWD/resources" 
-          $TEST_ENV/bin/python -m pytest src -m "not slow" --import-mode=importlib
+  windows-tests:
+    name: Run pytest (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Run pytest
+        run: uv run pytest -q
+      - name: Run live Rust networking test
+        run: cargo test -p networking dynamic_listener_port_is_used_for_discovery -- --nocapture

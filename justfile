@@ -28,20 +28,18 @@ check:
 
 # ---- dependencies ------------------------------------------------------------
 
-[unix]
 sync:
-    uv sync --all-packages --extra mlx
+    python scripts/sync_gpu.py
 
-[unix]
 sync-clean:
-    uv sync --all-packages --extra mlx --force-reinstall --no-cache
+    python scripts/sync_gpu.py --force-reinstall --no-cache
 
-# Windows has no MLX backend, so sync without the mlx extra.
+# Select PyTorch CUDA or ROCm on Windows when an appropriate GPU is present.
 sync-windows:
-    uv sync --all-packages
+    python scripts/sync_gpu.py
 
 sync-clean-windows:
-    uv sync --all-packages --force-reinstall --no-cache
+    python scripts/sync_gpu.py --force-reinstall --no-cache
 
 [unix]
 rust-rebuild:
@@ -56,9 +54,14 @@ rust-rebuild:
 
 # ---- build -------------------------------------------------------------------
 
+# `npm install --prefix dashboard` does not redirect npm to dashboard/ — npm
+# resolves the project from the working directory instead (npm/cli#5462).
+
+# Build the dashboard into dashboard/build/.
+[working-directory: 'dashboard']
 build-dashboard:
-    npm --prefix dashboard install
-    npm --prefix dashboard run build
+    npm install
+    npm run build
 
 [unix]
 package: build-dashboard

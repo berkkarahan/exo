@@ -133,6 +133,25 @@ let
             '';
             autoPatchelfIgnoreMissingDeps = [ "libcuda.so.1" ];
           });
+          torch = prev.torch.overrideAttrs (old: {
+            nativeBuildInputs = old.nativeBuildInputs ++ lib.optionals cudaSupport [ pkgs.autoAddDriverRunpath ];
+            buildInputs = old.buildInputs ++ [ pkgs.zlib ] ++ lib.optionals cudaSupport cudaLibs;
+            autoPatchelfIgnoreMissingDeps = lib.optionals cudaSupport [ "libcuda.so.1" ];
+          });
+          torchaudio = prev.torchaudio.overrideAttrs (old: {
+            nativeBuildInputs = old.nativeBuildInputs ++ lib.optionals cudaSupport [ pkgs.autoAddDriverRunpath ];
+            buildInputs = old.buildInputs ++ [ final.torch ] ++ lib.optionals cudaSupport [ cudaPackages.cuda_cudart ];
+            preFixup = (old.preFixup or "") + ''
+              addAutoPatchelfSearchPath "${final.torch}/${final.python.sitePackages}/torch/lib"
+            '';
+          });
+          torchvision = prev.torchvision.overrideAttrs (old: {
+            nativeBuildInputs = old.nativeBuildInputs ++ lib.optionals cudaSupport [ pkgs.autoAddDriverRunpath ];
+            buildInputs = old.buildInputs ++ [ final.torch ] ++ lib.optionals cudaSupport cudaLibs;
+            preFixup = (old.preFixup or "") + ''
+              addAutoPatchelfSearchPath "${final.torch}/${final.python.sitePackages}/torch/lib"
+            '';
+          });
         } // lib.optionalAttrs cudaSupport {
           "${libmlx_source}" = prev."${libmlx_source}".overrideAttrs (old: {
             nativeBuildInputs = old.nativeBuildInputs ++ [ pkgs.autoAddDriverRunpath ];
@@ -155,21 +174,6 @@ let
             nativeBuildInputs = old.nativeBuildInputs ++ [ pkgs.autoAddDriverRunpath ];
             buildInputs = old.buildInputs ++ cudaLibs;
           });
-          torch = prev.torch.overrideAttrs (old: {
-            nativeBuildInputs = old.nativeBuildInputs ++ [ pkgs.autoAddDriverRunpath ];
-            buildInputs = old.buildInputs ++ cudaLibs;
-            autoPatchelfIgnoreMissingDeps = [ "libcuda.so.1" ];
-          });
-          torchaudio = prev.torchaudio.overrideAttrs (old: {
-            nativeBuildInputs = old.nativeBuildInputs ++ [ pkgs.autoAddDriverRunpath ];
-            buildInputs = old.buildInputs ++ [ cudaPackages.cuda_cudart ];
-            preFixup = "addAutoPatchelfSearchPath '${final.torch}'";
-          });
-          torchvision = prev.torchvision.overrideAttrs (old: {
-            nativeBuildInputs = old.nativeBuildInputs ++ [ pkgs.autoAddDriverRunpath ];
-            preFixup = "addAutoPatchelfSearchPath '${final.torch}'";
-          });
-
           torch-c-dlpack-ext = prev.torch-c-dlpack-ext.overrideAttrs (old: {
             buildInputs = old.buildInputs ++ cudaLibs;
             autoPatchelfIgnoreMissingDeps = [ "libcuda.so.1" ];

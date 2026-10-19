@@ -2,6 +2,10 @@ import json
 from collections.abc import Generator
 from typing import Any
 
+import pytest
+
+pytest.importorskip("mlx_lm")
+
 from exo.api.types import CompletionTokensDetails, PromptTokensDetails, Usage
 from exo.shared.types.worker.runner_response import (
     FinishReason,
