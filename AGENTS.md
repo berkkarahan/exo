@@ -4,19 +4,19 @@ This file provides guidance to AI coding agents when working with code in this r
 
 ## Project Overview
 
-exo is a distributed AI inference system that connects multiple devices into a cluster. It enables running large language models across multiple machines using tinygrad as the inference backend and zenoh for peer-to-peer networking.
+wexo is a distributed AI inference system that connects multiple devices into a cluster. It enables running large language models across multiple machines using tinygrad as the inference backend and zenoh for peer-to-peer networking.
 
 ## Build & Run Commands
 
 ```bash
-# Build the dashboard (required before running exo)
+# Build the dashboard (required before running wexo)
 cd dashboard && npm install && npm run build && cd ..
 
-# Run exo (starts both master and worker with API at http://localhost:52416)
-uv run exo
+# Run wexo (starts both master and worker with API at http://localhost:52416)
+uv run wexo
 
 # Run with verbose logging
-uv run exo -v   # or -vv for more verbose
+uv run wexo -v   # or -vv for more verbose
 
 # Run tests (excludes slow tests by default)
 uv run pytest
@@ -25,10 +25,10 @@ uv run pytest
 uv run pytest -m ""
 
 # Run a specific test file
-uv run pytest src/exo/shared/tests/test_election.py
+uv run pytest src/wexo/shared/tests/test_election.py
 
 # Run a specific test function
-uv run pytest src/exo/shared/tests/test_election.py::test_function_name
+uv run pytest src/wexo/shared/tests/test_election.py::test_function_name
 
 # Type checking (strict mode)
 uv run basedpyright
@@ -68,7 +68,7 @@ If `nix fmt` changes any files, stage them before committing. The CI runs `nix f
 ## Architecture
 
 ### Node Composition
-A single exo `Node` (src/exo/main.py) runs multiple components:
+A single wexo `Node` (src/wexo/main.py) runs multiple components:
 - **Router**: zenoh-based pub/sub messaging via Rust bindings (exo_rs)
 - **Worker**: Handles inference tasks, downloads models, manages runner processes
 - **Master**: Coordinates cluster state, places model instances across nodes
@@ -76,7 +76,7 @@ A single exo `Node` (src/exo/main.py) runs multiple components:
 - **API**: FastAPI server for OpenAI-compatible chat completions
 
 ### Message Flow
-Components communicate via typed pub/sub topics (src/exo/routing/topics.py):
+Components communicate via typed pub/sub topics (src/wexo/routing/topics.py):
 - `GLOBAL_EVENTS`: Master broadcasts indexed events to all workers
 - `LOCAL_EVENTS`: Workers send events to master for indexing
 - `COMMANDS`: Workers/API send commands to master
@@ -85,12 +85,12 @@ Components communicate via typed pub/sub topics (src/exo/routing/topics.py):
 
 ### Event Sourcing
 The system uses event sourcing for state management:
-- `State` (src/exo/shared/types/state.py): Immutable state object
-- `apply()` (src/exo/shared/apply.py): Pure function that applies events to state
+- `State` (src/wexo/shared/types/state.py): Immutable state object
+- `apply()` (src/wexo/shared/apply.py): Pure function that applies events to state
 - Master indexes events and broadcasts; workers apply indexed events
 
 ### Key Type Hierarchy
-- `src/exo/shared/types/`: Pydantic models for all shared types
+- `src/wexo/shared/types/`: Pydantic models for all shared types
   - `events.py`: Event types (discriminated union)
   - `commands.py`: Command types
   - `tasks.py`: Task types for worker execution
@@ -124,11 +124,11 @@ Tests use pytest-asyncio with `asyncio_mode = "auto"`. Tests are in `tests/` sub
 
 ### Building and Running the Dashboard
 ```bash
-# Build the dashboard (must be done before running exo)
+# Build the dashboard (must be done before running wexo)
 cd dashboard && npm install && npm run build && cd ..
 
-# Start exo (serves the dashboard at http://localhost:52416)
-uv run exo &
+# Start wexo (serves the dashboard at http://localhost:52416)
+uv run wexo &
 sleep 8  # Wait for server to start
 ```
 

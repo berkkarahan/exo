@@ -1,0 +1,1029 @@
+from collections.abc import Mapping
+
+import pytest
+
+from wexo.master.placement import (
+    get_transition_events,
+    place_instance,
+)
+from wexo.master.tests.conftest import (
+    create_node_memory,
+    create_node_network,
+    create_socket_connection,
+)
+from wexo.shared.models.model_cards import ModelCard, ModelId, ModelTask
+from wexo.shared.topology import Topology
+from wexo.shared.types.backends import Backend
+from wexo.shared.types.commands import PlaceInstance
+from wexo.shared.types.common import CommandId, NodeId
+from wexo.shared.types.events import (
+    InstanceCreated,
+    InstanceDeleted,
+    TaskStatusUpdated,
+)
+from wexo.shared.types.memory import Memory
+from wexo.shared.types.tasks import TaskId, TaskStatus, TextGeneration
+from wexo.shared.types.text_generation import (
+    InputMessage,
+    InputMessageContent,
+    TextGenerationTaskParams,
+)
+from wexo.shared.types.topology import Connection
+from wexo.shared.types.worker.downloads import (
+    DownloadCompleted,
+    DownloadFailed,
+    DownloadOngoing,
+    DownloadProgressData,
+)
+from wexo.shared.types.worker.instances import (
+    Instance,
+    InstanceId,
+    InstanceMeta,
+    TinygradInstance,
+)
+from wexo.shared.types.worker.runners import ShardAssignments
+from wexo.shared.types.worker.shards import (
+    PipelineShardMetadata,
+    Sharding,
+    TensorShardMetadata,
+)
+
+
+@pytest.fixture
+def instance() -> Instance:
+    return TinygradInstance(
+        instance_id=InstanceId(),
+        shard_assignments=ShardAssignments(
+            model_id=ModelId("test-model"), runner_to_shard={}, node_to_runner={}
+        ),
+        device_backend_by_node={},
+        hosts_by_node={},
+        ephemeral_port=50000,
+    )
+
+
+@pytest.fixture
+def model_card() -> ModelCard:
+    return ModelCard(
+        model_id=ModelId("test-model"),
+        storage_size=Memory.from_kb(1000),
+        n_layers=10,
+        hidden_size=30,
+        supports_tensor=True,
+        tasks=[ModelTask.TextGeneration],
+        backends=[Backend.TinygradMetal],
+    )
+
+
+def _metal_only(
+    node_memory: Mapping[NodeId, object],
+) -> dict[NodeId, list[Backend]]:
+    return {node_id: [Backend.TinygradMetal] for node_id in node_memory}
+
+
+def place_instance_command(model_card: ModelCard) -> PlaceInstance:
+    return PlaceInstance(
+        command_id=CommandId(),
+        model_card=model_card,
+        sharding=Sharding.Pipeline,
+        instance_meta=InstanceMeta.Tinygrad,
+        min_nodes=1,
+    )
+
+
+@pytest.mark.parametrize(
+    "available_memory,total_layers,expected_layers",
+    [
+        ((500, 500, 1000), 12, (3, 3, 6)),
+        ((500, 500, 500), 12, (4, 4, 4)),
+        ((312, 468, 1092), 12, (2, 3, 7)),
+    ],
+)
+def test_get_instance_placements_create_instance(
+    available_memory: tuple[int, int, int],
+    total_layers: int,
+    expected_layers: tuple[int, int, int],
+    model_card: ModelCard,
+):
+    # arrange
+    model_card = model_card.model_copy(
+        update={
+            "n_layers": total_layers,
+            "storage_size": Memory.from_bytes(
+                sum(available_memory)
+            ),  # make it exactly fit across all nodes
+        }
+    )
+    topology = Topology()
+
+    cic = place_instance_command(model_card)
+    node_id_a = NodeId()
+    node_id_b = NodeId()
+    node_id_c = NodeId()
+
+    # fully connected (directed) between the 3 nodes
+    conn_a_b = Connection(
+        source=node_id_a, sink=node_id_b, edge=create_socket_connection(1)
+    )
+    conn_b_c = Connection(
+        source=node_id_b, sink=node_id_c, edge=create_socket_connection(2)
+    )
+    conn_c_a = Connection(
+        source=node_id_c, sink=node_id_a, edge=create_socket_connection(3)
+    )
+    conn_c_b = Connection(
+        source=node_id_c, sink=node_id_b, edge=create_socket_connection(4)
+    )
+    conn_a_c = Connection(
+        source=node_id_a, sink=node_id_c, edge=create_socket_connection(5)
+    )
+    conn_b_a = Connection(
+        source=node_id_b, sink=node_id_a, edge=create_socket_connection(6)
+    )
+
+    node_memory = {
+        node_id_a: create_node_memory(available_memory[0]),
+        node_id_b: create_node_memory(available_memory[1]),
+        node_id_c: create_node_memory(available_memory[2]),
+    }
+    node_network = {
+        node_id_a: create_node_network(),
+        node_id_b: create_node_network(),
+        node_id_c: create_node_network(),
+    }
+    topology.add_node(node_id_a)
+    topology.add_node(node_id_b)
+    topology.add_node(node_id_c)
+    topology.add_connection(conn_a_b)
+    topology.add_connection(conn_b_c)
+    topology.add_connection(conn_c_a)
+    topology.add_connection(conn_c_b)
+    topology.add_connection(conn_a_c)
+    topology.add_connection(conn_b_a)
+
+    # act
+    placements = place_instance(
+        cic, topology, {}, node_memory, node_network, _metal_only(node_memory)
+    )
+
+    # assert
+    assert len(placements) == 1
+    instance_id = list(placements.keys())[0]
+    instance = placements[instance_id]
+    assert instance.shard_assignments.model_id == model_card.model_id
+
+    runner_id_a = instance.shard_assignments.node_to_runner[node_id_a]
+    runner_id_b = instance.shard_assignments.node_to_runner[node_id_b]
+    runner_id_c = instance.shard_assignments.node_to_runner[node_id_c]
+
+    shard_a = instance.shard_assignments.runner_to_shard[runner_id_a]
+    shard_b = instance.shard_assignments.runner_to_shard[runner_id_b]
+    shard_c = instance.shard_assignments.runner_to_shard[runner_id_c]
+
+    assert shard_a.end_layer - shard_a.start_layer == expected_layers[0]
+    assert shard_b.end_layer - shard_b.start_layer == expected_layers[1]
+    assert shard_c.end_layer - shard_c.start_layer == expected_layers[2]
+
+    shards = [shard_a, shard_b, shard_c]
+    shards_sorted = sorted(shards, key=lambda s: s.start_layer)
+    assert shards_sorted[0].start_layer == 0
+    assert shards_sorted[-1].end_layer == total_layers
+
+
+def test_get_instance_placements_one_node_exact_fit() -> None:
+    topology = Topology()
+    node_id = NodeId()
+    topology.add_node(node_id)
+    node_memory = {node_id: create_node_memory(1000 * 1024)}
+    node_network = {node_id: create_node_network()}
+    cic = place_instance_command(
+        ModelCard(
+            model_id=ModelId("test-model"),
+            storage_size=Memory.from_kb(1000),
+            n_layers=10,
+            hidden_size=1000,
+            supports_tensor=True,
+            tasks=[ModelTask.TextGeneration],
+            backends=[Backend.TinygradMetal],
+        ),
+    )
+    placements = place_instance(
+        cic, topology, {}, node_memory, node_network, _metal_only(node_memory)
+    )
+
+    assert len(placements) == 1
+    instance_id = list(placements.keys())[0]
+    instance = placements[instance_id]
+    assert instance.shard_assignments.model_id == "test-model"
+    assert len(instance.shard_assignments.node_to_runner) == 1
+    assert len(instance.shard_assignments.runner_to_shard) == 1
+    assert len(instance.shard_assignments.runner_to_shard) == 1
+
+
+def test_get_instance_placements_one_node_fits_with_extra_memory() -> None:
+    topology = Topology()
+    node_id = NodeId()
+    topology.add_node(node_id)
+    node_memory = {node_id: create_node_memory(1001 * 1024)}
+    node_network = {node_id: create_node_network()}
+    cic = place_instance_command(
+        ModelCard(
+            model_id=ModelId("test-model"),
+            storage_size=Memory.from_kb(1000),
+            n_layers=10,
+            hidden_size=1000,
+            supports_tensor=True,
+            tasks=[ModelTask.TextGeneration],
+            backends=[Backend.TinygradMetal],
+        ),
+    )
+    placements = place_instance(
+        cic, topology, {}, node_memory, node_network, _metal_only(node_memory)
+    )
+
+    assert len(placements) == 1
+    instance_id = list(placements.keys())[0]
+    instance = placements[instance_id]
+    assert instance.shard_assignments.model_id == "test-model"
+    assert len(instance.shard_assignments.node_to_runner) == 1
+    assert len(instance.shard_assignments.runner_to_shard) == 1
+    assert len(instance.shard_assignments.runner_to_shard) == 1
+
+
+def test_get_instance_placements_one_node_not_fit() -> None:
+    topology = Topology()
+    node_id = NodeId()
+    topology.add_node(node_id)
+    node_memory = {node_id: create_node_memory(1000 * 1024)}
+    node_network = {node_id: create_node_network()}
+    cic = place_instance_command(
+        model_card=ModelCard(
+            model_id=ModelId("test-model"),
+            storage_size=Memory.from_kb(1001),
+            n_layers=10,
+            hidden_size=1000,
+            supports_tensor=True,
+            tasks=[ModelTask.TextGeneration],
+            backends=[Backend.TinygradMetal],
+        ),
+    )
+
+    with pytest.raises(ValueError, match="No cycles found with sufficient memory"):
+        place_instance(
+            cic, topology, {}, node_memory, node_network, _metal_only(node_memory)
+        )
+
+
+def test_get_transition_events_no_change(instance: Instance):
+    # arrange
+    instance_id = InstanceId()
+    current_instances = {instance_id: instance}
+    target_instances = {instance_id: instance}
+
+    # act
+    events = get_transition_events(current_instances, target_instances, {})
+
+    # assert
+    assert len(events) == 0
+
+
+def test_get_transition_events_create_instance(instance: Instance):
+    # arrange
+    instance_id = InstanceId()
+    current_instances: dict[InstanceId, Instance] = {}
+    target_instances: dict[InstanceId, Instance] = {instance_id: instance}
+
+    # act
+    events = get_transition_events(current_instances, target_instances, {})
+
+    # assert
+    assert len(events) == 1
+    assert isinstance(events[0], InstanceCreated)
+
+
+def test_get_transition_events_delete_instance(instance: Instance):
+    # arrange
+    instance_id = InstanceId()
+    current_instances: dict[InstanceId, Instance] = {instance_id: instance}
+    target_instances: dict[InstanceId, Instance] = {}
+
+    # act
+    events = get_transition_events(current_instances, target_instances, {})
+
+    # assert
+    assert len(events) == 1
+    assert isinstance(events[0], InstanceDeleted)
+    assert events[0].instance_id == instance_id
+
+
+def test_placement_selects_leaf_nodes(
+    model_card: ModelCard,
+):
+    # arrange
+    topology = Topology()
+
+    model_card = model_card.model_copy(update={"storage_size": Memory.from_bytes(1000)})
+
+    node_id_a = NodeId()
+    node_id_b = NodeId()
+    node_id_c = NodeId()
+    node_id_d = NodeId()
+
+    node_memory = {
+        node_id_a: create_node_memory(500),
+        node_id_b: create_node_memory(600),
+        node_id_c: create_node_memory(600),
+        node_id_d: create_node_memory(500),
+    }
+    node_network = {
+        node_id_a: create_node_network(),
+        node_id_b: create_node_network(),
+        node_id_c: create_node_network(),
+        node_id_d: create_node_network(),
+    }
+
+    topology.add_node(node_id_a)
+    topology.add_node(node_id_b)
+    topology.add_node(node_id_c)
+    topology.add_node(node_id_d)
+
+    # Daisy chain topology (directed)
+    topology.add_connection(
+        Connection(source=node_id_a, sink=node_id_b, edge=create_socket_connection(1))
+    )
+    topology.add_connection(
+        Connection(source=node_id_b, sink=node_id_a, edge=create_socket_connection(1))
+    )
+    topology.add_connection(
+        Connection(source=node_id_b, sink=node_id_c, edge=create_socket_connection(1))
+    )
+    topology.add_connection(
+        Connection(source=node_id_c, sink=node_id_b, edge=create_socket_connection(1))
+    )
+    topology.add_connection(
+        Connection(source=node_id_c, sink=node_id_d, edge=create_socket_connection(1))
+    )
+    topology.add_connection(
+        Connection(source=node_id_d, sink=node_id_c, edge=create_socket_connection(1))
+    )
+
+    cic = place_instance_command(model_card=model_card)
+
+    # act
+    placements = place_instance(
+        cic, topology, {}, node_memory, node_network, _metal_only(node_memory)
+    )
+
+    # assert
+    assert len(placements) == 1
+    instance = list(placements.values())[0]
+
+    assigned_nodes = set(instance.shard_assignments.node_to_runner.keys())
+    assert assigned_nodes == set((node_id_a, node_id_b)) or assigned_nodes == set(
+        (
+            node_id_c,
+            node_id_d,
+        )
+    )
+
+
+def _make_task(
+    instance_id: InstanceId,
+    status: TaskStatus = TaskStatus.Running,
+) -> TextGeneration:
+    return TextGeneration(
+        task_id=TaskId(),
+        task_status=status,
+        instance_id=instance_id,
+        command_id=CommandId(),
+        task_params=TextGenerationTaskParams(
+            model=ModelId("test-model"),
+            input=[InputMessage(role="user", content=InputMessageContent("hello"))],
+        ),
+    )
+
+
+def test_get_transition_events_delete_instance_cancels_running_tasks(
+    instance: Instance,
+):
+    # arrange
+    instance_id = InstanceId()
+    current_instances: dict[InstanceId, Instance] = {instance_id: instance}
+    target_instances: dict[InstanceId, Instance] = {}
+    task = _make_task(instance_id, TaskStatus.Running)
+    tasks = {task.task_id: task}
+
+    # act
+    events = get_transition_events(current_instances, target_instances, tasks)
+
+    # assert – cancellation event should come before the deletion event
+    assert len(events) == 2
+    assert isinstance(events[0], TaskStatusUpdated)
+    assert events[0].task_id == task.task_id
+    assert events[0].task_status == TaskStatus.Cancelled
+    assert isinstance(events[1], InstanceDeleted)
+    assert events[1].instance_id == instance_id
+
+
+def test_get_transition_events_delete_instance_cancels_pending_tasks(
+    instance: Instance,
+):
+    # arrange
+    instance_id = InstanceId()
+    current_instances: dict[InstanceId, Instance] = {instance_id: instance}
+    target_instances: dict[InstanceId, Instance] = {}
+    task = _make_task(instance_id, TaskStatus.Pending)
+    tasks = {task.task_id: task}
+
+    # act
+    events = get_transition_events(current_instances, target_instances, tasks)
+
+    # assert
+    assert len(events) == 2
+    assert isinstance(events[0], TaskStatusUpdated)
+    assert events[0].task_id == task.task_id
+    assert events[0].task_status == TaskStatus.Cancelled
+    assert isinstance(events[1], InstanceDeleted)
+
+
+def test_get_transition_events_delete_instance_ignores_completed_tasks(
+    instance: Instance,
+):
+    # arrange
+    instance_id = InstanceId()
+    current_instances: dict[InstanceId, Instance] = {instance_id: instance}
+    target_instances: dict[InstanceId, Instance] = {}
+    tasks = {
+        t.task_id: t
+        for t in [
+            _make_task(instance_id, TaskStatus.Complete),
+            _make_task(instance_id, TaskStatus.Failed),
+            _make_task(instance_id, TaskStatus.TimedOut),
+            _make_task(instance_id, TaskStatus.Cancelled),
+        ]
+    }
+
+    # act
+    events = get_transition_events(current_instances, target_instances, tasks)
+
+    # assert – only the InstanceDeleted event, no cancellations
+    assert len(events) == 1
+    assert isinstance(events[0], InstanceDeleted)
+
+
+def test_get_transition_events_delete_instance_cancels_only_matching_tasks(
+    instance: Instance,
+):
+    # arrange
+    instance_id_a = InstanceId()
+    instance_id_b = InstanceId()
+    current_instances: dict[InstanceId, Instance] = {
+        instance_id_a: instance,
+        instance_id_b: instance,
+    }
+    # only delete instance A, keep instance B
+    target_instances: dict[InstanceId, Instance] = {instance_id_b: instance}
+
+    task_a = _make_task(instance_id_a, TaskStatus.Running)
+    task_b = _make_task(instance_id_b, TaskStatus.Running)
+    tasks = {task_a.task_id: task_a, task_b.task_id: task_b}
+
+    # act
+    events = get_transition_events(current_instances, target_instances, tasks)
+
+    # assert – only task_a should be cancelled
+    cancel_events = [e for e in events if isinstance(e, TaskStatusUpdated)]
+    delete_events = [e for e in events if isinstance(e, InstanceDeleted)]
+    assert len(cancel_events) == 1
+    assert cancel_events[0].task_id == task_a.task_id
+    assert cancel_events[0].task_status == TaskStatus.Cancelled
+    assert len(delete_events) == 1
+    assert delete_events[0].instance_id == instance_id_a
+
+
+def _make_shard_metadata(model_card: ModelCard) -> PipelineShardMetadata:
+    return PipelineShardMetadata(
+        model_card=model_card,
+        device_rank=0,
+        world_size=1,
+        start_layer=0,
+        end_layer=model_card.n_layers,
+        n_layers=model_card.n_layers,
+    )
+
+
+def test_placement_prefers_cycle_with_downloaded_model(
+    model_card: ModelCard,
+) -> None:
+    """When two cycles are otherwise equal, prefer the one with the model already downloaded."""
+    topology = Topology()
+
+    model_card = model_card.model_copy(update={"storage_size": Memory.from_bytes(500)})
+
+    node_a = NodeId()
+    node_b = NodeId()
+
+    node_memory = {
+        node_a: create_node_memory(1000),
+        node_b: create_node_memory(1000),
+    }
+    node_network = {
+        node_a: create_node_network(),
+        node_b: create_node_network(),
+    }
+
+    topology.add_node(node_a)
+    topology.add_node(node_b)
+    # No connections between them — two single-node cycles
+
+    shard_meta = _make_shard_metadata(model_card)
+
+    # node_b has the model fully downloaded, node_a does not
+    download_status = {
+        node_b: [
+            DownloadCompleted(
+                node_id=node_b,
+                shard_metadata=shard_meta,
+                total=model_card.storage_size,
+            ),
+        ],
+    }
+
+    cic = place_instance_command(model_card)
+    placements = place_instance(
+        cic,
+        topology,
+        {},
+        node_memory,
+        node_network,
+        _metal_only(node_memory),
+        download_status=download_status,
+    )
+
+    assert len(placements) == 1
+    instance = list(placements.values())[0]
+    assigned_nodes = set(instance.shard_assignments.node_to_runner.keys())
+    assert assigned_nodes == {node_b}
+
+
+def test_placement_prefers_cycle_with_higher_download_progress(
+    model_card: ModelCard,
+) -> None:
+    """When two cycles are otherwise equal, prefer the one with more download progress."""
+    topology = Topology()
+
+    model_card = model_card.model_copy(update={"storage_size": Memory.from_bytes(1000)})
+
+    node_a = NodeId()
+    node_b = NodeId()
+
+    node_memory = {
+        node_a: create_node_memory(1000),
+        node_b: create_node_memory(1000),
+    }
+    node_network = {
+        node_a: create_node_network(),
+        node_b: create_node_network(),
+    }
+
+    topology.add_node(node_a)
+    topology.add_node(node_b)
+
+    shard_meta = _make_shard_metadata(model_card)
+
+    # node_a: 30% downloaded, node_b: 80% downloaded
+    download_status = {
+        node_a: [
+            DownloadOngoing(
+                node_id=node_a,
+                shard_metadata=shard_meta,
+                download_progress=DownloadProgressData(
+                    total=Memory.from_bytes(1000),
+                    downloaded=Memory.from_bytes(300),
+                    downloaded_this_session=Memory.from_bytes(300),
+                    completed_files=0,
+                    total_files=1,
+                    speed=0.0,
+                    eta_ms=0,
+                    files={},
+                ),
+            ),
+        ],
+        node_b: [
+            DownloadOngoing(
+                node_id=node_b,
+                shard_metadata=shard_meta,
+                download_progress=DownloadProgressData(
+                    total=Memory.from_bytes(1000),
+                    downloaded=Memory.from_bytes(800),
+                    downloaded_this_session=Memory.from_bytes(800),
+                    completed_files=0,
+                    total_files=1,
+                    speed=0.0,
+                    eta_ms=0,
+                    files={},
+                ),
+            ),
+        ],
+    }
+
+    cic = place_instance_command(model_card)
+    placements = place_instance(
+        cic,
+        topology,
+        {},
+        node_memory,
+        node_network,
+        _metal_only(node_memory),
+        download_status=download_status,
+    )
+
+    assert len(placements) == 1
+    instance = list(placements.values())[0]
+    assigned_nodes = set(instance.shard_assignments.node_to_runner.keys())
+    assert assigned_nodes == {node_b}
+
+
+def test_placement_does_not_prefer_cycle_with_failed_download(
+    model_card: ModelCard,
+) -> None:
+    """A failed download should count as 0% — not preferred over a node with no download history."""
+    topology = Topology()
+
+    model_card = model_card.model_copy(update={"storage_size": Memory.from_bytes(500)})
+
+    node_a = NodeId()
+    node_b = NodeId()
+
+    # node_a has slightly more RAM so it would win on the RAM tiebreaker
+    node_memory = {
+        node_a: create_node_memory(1001),
+        node_b: create_node_memory(1000),
+    }
+    node_network = {
+        node_a: create_node_network(),
+        node_b: create_node_network(),
+    }
+
+    topology.add_node(node_a)
+    topology.add_node(node_b)
+
+    shard_meta = _make_shard_metadata(model_card)
+
+    # node_b has a failed download — should not be preferred
+    download_status = {
+        node_b: [
+            DownloadFailed(
+                node_id=node_b,
+                shard_metadata=shard_meta,
+                error_message="connection reset",
+            ),
+        ],
+    }
+
+    cic = place_instance_command(model_card)
+    placements = place_instance(
+        cic,
+        topology,
+        {},
+        node_memory,
+        node_network,
+        _metal_only(node_memory),
+        download_status=download_status,
+    )
+
+    assert len(placements) == 1
+    instance = list(placements.values())[0]
+    assigned_nodes = set(instance.shard_assignments.node_to_runner.keys())
+    # node_a should win on RAM tiebreaker since failed download scores 0.0
+    assert assigned_nodes == {node_a}
+
+
+def test_placement_rejects_when_model_backends_disjoint_from_engine(
+    model_card: ModelCard,
+):
+    topology = Topology()
+    node_id = NodeId()
+    topology.add_node(node_id)
+    node_memory = {node_id: create_node_memory(1000 * 1024)}
+    node_network = {node_id: create_node_network()}
+
+    cic = place_instance_command(
+        model_card.model_copy(update={"backends": [Backend.Vllm]})
+    )
+
+    with pytest.raises(ValueError, match="cannot satisfy engine Tinygrad"):
+        place_instance(
+            cic, topology, {}, node_memory, node_network, _metal_only(node_memory)
+        )
+
+
+def test_placement_rejects_when_only_some_nodes_support_backend(
+    model_card: ModelCard,
+):
+    topology = Topology()
+    node_a = NodeId()
+    node_b = NodeId()
+    node_c = NodeId()
+    for n in (node_a, node_b, node_c):
+        topology.add_node(n)
+
+    eth = create_socket_connection(1)
+    for src, dst in [
+        (node_a, node_b),
+        (node_b, node_c),
+        (node_c, node_a),
+        (node_a, node_c),
+        (node_c, node_b),
+        (node_b, node_a),
+    ]:
+        topology.add_connection(Connection(source=src, sink=dst, edge=eth))
+
+    node_memory = {n: create_node_memory(500 * 1024) for n in (node_a, node_b, node_c)}
+    node_network = {n: create_node_network() for n in (node_a, node_b, node_c)}
+    node_backends = {
+        node_a: [Backend.TinygradMetal],
+        node_b: [Backend.TinygradMetal],
+        node_c: [Backend.TinygradCuda],  # the lone CUDA-only node breaks the cycle
+    }
+
+    cic = place_instance_command(
+        model_card.model_copy(
+            update={
+                "backends": [Backend.TinygradMetal],
+                "n_layers": 12,
+                "storage_size": Memory.from_kb(1500),
+            }
+        )
+    )
+
+    with pytest.raises(ValueError, match="No cycle where every node supports"):
+        place_instance(cic, topology, {}, node_memory, node_network, node_backends)
+def _tinygrad_model_card() -> ModelCard:
+    return ModelCard(
+        model_id=ModelId("tinygrad-model"),
+        storage_size=Memory.from_kb(1000),
+        n_layers=10,
+        hidden_size=1000,
+        supports_tensor=True,
+        tasks=[ModelTask.TextGeneration],
+        backends=[Backend.TinygradAmd, Backend.TinygradCuda, Backend.TinygradCpu],
+    )
+
+
+def test_tinygrad_single_node_keeps_tinygrad_instance() -> None:
+    topology = Topology()
+    node_id = NodeId()
+    topology.add_node(node_id)
+    node_memory = {node_id: create_node_memory(1000 * 1024)}
+    node_network = {node_id: create_node_network()}
+    command = PlaceInstance(
+        command_id=CommandId(),
+        model_card=_tinygrad_model_card(),
+        sharding=Sharding.Tensor,
+        instance_meta=InstanceMeta.Tinygrad,
+        min_nodes=1,
+    )
+    placements = place_instance(
+        command,
+        topology,
+        {},
+        node_memory,
+        node_network,
+        {node_id: [Backend.TinygradAmd, Backend.TinygradCpu]},
+    )
+
+    assert len(placements) == 1
+    instance = next(iter(placements.values()))
+    assert isinstance(instance, TinygradInstance)
+    assert instance.device_backend_by_node == {node_id: Backend.TinygradAmd}
+    shard = next(iter(instance.shard_assignments.runner_to_shard.values()))
+    assert shard.end_layer - shard.start_layer == 10
+
+
+def test_tinygrad_placement_uses_each_nodes_advertised_backend() -> None:
+    topology = Topology()
+    node_amd = NodeId()
+    node_cuda = NodeId()
+    topology.add_node(node_amd)
+    topology.add_node(node_cuda)
+    ethernet = create_socket_connection(1)
+    topology.add_connection(Connection(source=node_amd, sink=node_cuda, edge=ethernet))
+    topology.add_connection(Connection(source=node_cuda, sink=node_amd, edge=ethernet))
+    node_memory = {
+        node_amd: create_node_memory(1000 * 1024),
+        node_cuda: create_node_memory(1000 * 1024),
+    }
+    node_network = {
+        node_amd: create_node_network(),
+        node_cuda: create_node_network(),
+    }
+    command = PlaceInstance(
+        command_id=CommandId(),
+        model_card=_tinygrad_model_card(),
+        sharding=Sharding.Pipeline,
+        instance_meta=InstanceMeta.Tinygrad,
+        min_nodes=2,
+    )
+    placements = place_instance(
+        command,
+        topology,
+        {},
+        node_memory,
+        node_network,
+        {
+            node_amd: [Backend.TinygradMetal, Backend.TinygradAmd],
+            node_cuda: [Backend.TinygradCuda, Backend.TinygradAmd],
+        },
+    )
+
+    instance = next(iter(placements.values()))
+    assert isinstance(instance, TinygradInstance)
+    assert instance.device_backend_by_node[node_amd] == Backend.TinygradAmd
+    assert instance.device_backend_by_node[node_cuda] == Backend.TinygradCuda
+
+
+def test_placement_rejects_a_windows_node_when_the_model_card_is_mac_only() -> None:
+    topology = Topology()
+    mac_node = NodeId()
+    windows_node = NodeId()
+    topology.add_node(mac_node)
+    topology.add_node(windows_node)
+    ethernet = create_socket_connection(1)
+    topology.add_connection(
+        Connection(source=mac_node, sink=windows_node, edge=ethernet)
+    )
+    topology.add_connection(
+        Connection(source=windows_node, sink=mac_node, edge=ethernet)
+    )
+    model_card = _tinygrad_model_card().model_copy(
+        update={"backends": [Backend.TinygradMetal, Backend.TinygradCuda, Backend.TinygradCpu]}
+    )
+    command = PlaceInstance(
+        command_id=CommandId(),
+        model_card=model_card,
+        sharding=Sharding.Pipeline,
+        instance_meta=InstanceMeta.Tinygrad,
+        min_nodes=2,
+    )
+    with pytest.raises(ValueError, match="No cycle where every node supports"):
+        place_instance(
+            command,
+            topology,
+            {},
+            {
+                mac_node: create_node_memory(1000 * 1024),
+                windows_node: create_node_memory(1000 * 1024),
+            },
+            {
+                mac_node: create_node_network(),
+                windows_node: create_node_network(),
+            },
+            {
+                mac_node: [Backend.TinygradMetal, Backend.TinygradCpu],
+                windows_node: [Backend.WinAMD],
+            },
+        )
+
+
+def test_tinygrad_placement_keeps_the_windows_join_identity() -> None:
+    topology = Topology()
+    mac_node = NodeId()
+    windows_node = NodeId()
+    topology.add_node(mac_node)
+    topology.add_node(windows_node)
+    ethernet = create_socket_connection(1)
+    topology.add_connection(
+        Connection(source=mac_node, sink=windows_node, edge=ethernet)
+    )
+    topology.add_connection(
+        Connection(source=windows_node, sink=mac_node, edge=ethernet)
+    )
+    model_card = _tinygrad_model_card().model_copy(
+        update={
+            "backends": [
+                Backend.TinygradMetal,
+                Backend.WinAMD,
+                Backend.WinCUDA,
+                Backend.WinCPU,
+            ]
+        }
+    )
+    command = PlaceInstance(
+        command_id=CommandId(),
+        model_card=model_card,
+        sharding=Sharding.Pipeline,
+        instance_meta=InstanceMeta.Tinygrad,
+        min_nodes=2,
+    )
+    placements = place_instance(
+        command,
+        topology,
+        {},
+        {
+            mac_node: create_node_memory(1000 * 1024),
+            windows_node: create_node_memory(1000 * 1024),
+        },
+        {
+            mac_node: create_node_network(),
+            windows_node: create_node_network(),
+        },
+        {
+            mac_node: [Backend.TinygradMetal, Backend.TinygradMetal],
+            windows_node: [Backend.WinAMD],
+        },
+    )
+    instance = next(iter(placements.values()))
+    assert isinstance(instance, TinygradInstance)
+    assert instance.device_backend_by_node[mac_node] == Backend.TinygradMetal
+    assert instance.device_backend_by_node[windows_node] == Backend.WinAMD
+
+
+def test_tinygrad_placement_rejects_a_node_without_join_backends() -> None:
+    topology = Topology()
+    node_id = NodeId()
+    topology.add_node(node_id)
+    command = PlaceInstance(
+        command_id=CommandId(),
+        model_card=_tinygrad_model_card(),
+        sharding=Sharding.Pipeline,
+        instance_meta=InstanceMeta.Tinygrad,
+        min_nodes=1,
+    )
+    with pytest.raises(ValueError, match="No cycle where every node supports"):
+        place_instance(
+            command,
+            topology,
+            {},
+            {node_id: create_node_memory(1000 * 1024)},
+            {node_id: create_node_network()},
+            {node_id: [Backend.Vllm]},
+        )
+
+
+def test_tinygrad_multi_node_tensor_command_places_every_layer_on_each_rank() -> None:
+    topology = Topology()
+    node_ids = [NodeId(), NodeId(), NodeId()]
+    for node_id in node_ids:
+        topology.add_node(node_id)
+    for source_index, source in enumerate(node_ids):
+        for sink_index, sink in enumerate(node_ids):
+            if source_index == sink_index:
+                continue
+            topology.add_connection(
+                Connection(
+                    source=source,
+                    sink=sink,
+                    edge=create_socket_connection(sink_index + 1),
+                )
+            )
+    node_memory = {node_id: create_node_memory(1000 * 1024) for node_id in node_ids}
+    node_network = {node_id: create_node_network() for node_id in node_ids}
+    node_backends = {
+        node_id: [Backend.TinygradAmd, Backend.TinygradCpu] for node_id in node_ids
+    }
+    command = PlaceInstance(
+        command_id=CommandId(),
+        model_card=_tinygrad_model_card().model_copy(update={"hidden_size": 996}),
+        sharding=Sharding.Tensor,
+        instance_meta=InstanceMeta.Tinygrad,
+        min_nodes=3,
+    )
+    placements = place_instance(
+        command,
+        topology,
+        {},
+        node_memory,
+        node_network,
+        node_backends,
+    )
+
+    instance = next(iter(placements.values()))
+    assert isinstance(instance, TinygradInstance)
+    assert instance.ephemeral_port != 0
+    ranked: list[tuple[TensorShardMetadata, NodeId]] = []
+    for node_id, runner_id in instance.shard_assignments.node_to_runner.items():
+        shard = instance.shard_assignments.runner_to_shard[runner_id]
+        assert isinstance(shard, TensorShardMetadata)
+        ranked.append((shard, node_id))
+    ranked.sort(key=lambda item: item[0].device_rank)
+    assert [shard.device_rank for shard, _node_id in ranked] == [0, 1, 2]
+    for shard, node_id in ranked:
+        assert shard.world_size == 3
+        assert shard.start_layer == 0
+        assert shard.end_layer == 10
+        hosts = instance.hosts_by_node[node_id]
+        assert len(hosts) == 3
+        assert hosts[shard.device_rank].ip == "0.0.0.0"
+        assert hosts[shard.device_rank].port == instance.ephemeral_port
+        for other_rank, host in enumerate(hosts):
+            if other_rank == shard.device_rank:
+                continue
+            if other_rank in {shard.device_rank - 1, shard.device_rank + 1}:
+                assert host.ip not in {"0.0.0.0", "198.51.100.1"}
+                assert host.port == instance.ephemeral_port
+            else:
+                assert host.ip == "198.51.100.1"
+                assert host.port == 0
+    assert instance.hosts_by_node[ranked[2][1]][0].ip == "198.51.100.1"
+    assert instance.hosts_by_node[ranked[0][1]][2].ip == "198.51.100.1"

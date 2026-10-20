@@ -30,7 +30,7 @@ git clone https://github.com/exo-explore/exo.git
 cd exo/dashboard
 npm install && npm run build && cd ..
 uv sync --extra tinygrad
-uv run exo
+uv run wexo
 ```
 
 ## Development
@@ -111,7 +111,7 @@ EXO supports multiple API formats through an adapter pattern. Adapters convert A
 
 ### Adapter Architecture
 
-All adapters live in `src/exo/master/adapters/` and follow the same pattern:
+All adapters live in `src/wexo/master/adapters/` and follow the same pattern:
 
 1. Convert API-specific requests to `TextGenerationTaskParams`
 2. Handle both streaming and non-streaming response generation
@@ -129,7 +129,7 @@ All adapters live in `src/exo/master/adapters/` and follow the same pattern:
 
 To add support for a new API format:
 
-1. Create a new adapter file in `src/exo/master/adapters/`
+1. Create a new adapter file in `src/wexo/master/adapters/`
 2. Implement a request conversion function:
    ```python
    def your_api_request_to_text_generation(
@@ -156,7 +156,7 @@ To add support for a new API format:
        # Collect all chunks and return single response
        pass
    ```
-5. Register the adapter endpoints in `src/exo/master/api.py`
+5. Register the adapter endpoints in `src/wexo/master/api.py`
 
 The adapter pattern keeps API-specific logic isolated from core inference systems. Internal systems (worker, runner, event sourcing) only see `TextGenerationTaskParams` and `TokenChunk` objects - no API-specific types cross the adapter boundary.
 

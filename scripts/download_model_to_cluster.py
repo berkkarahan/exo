@@ -24,8 +24,8 @@ from typing import Any
 import httpx
 from loguru import logger
 
-from exo.shared.models.model_cards import ModelCard, ModelId
-from exo.shared.types.worker.shards import PipelineShardMetadata
+from wexo.shared.models.model_cards import ModelCard, ModelId
+from wexo.shared.types.worker.shards import PipelineShardMetadata
 
 
 async def fetch_topology_nodes(client: httpx.AsyncClient, base: str) -> list[str]:

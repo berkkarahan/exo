@@ -53,10 +53,10 @@ These are deliberate rebrand/fork differences - keep them when resolving conflic
 
 - wEXO branding and logos (e.g. `dashboard/wEXO-logo*.png`, `dashboard/static/`, dashboard titles,
   `wEXO-*` Tailwind color tokens in `dashboard/src/`).
-- The wEXO home/data directory `~/.wexo` (`EXO_HOME=.wexo`, `src/exo/shared/constants.py`).
+- The wEXO home/data directory `~/.wexo` (`EXO_HOME=.wexo`, `src/wexo/shared/constants.py`).
 - Fork-specific packaging names (`wexo` in `packaging/pyinstaller/exo.spec`) and the macOS app
   (`app/EXO/`).
-- The zenoh default namespace `wEXO` (`src/exo/main.py`).
+- The zenoh default namespace `wEXO` (`src/wexo/main.py`).
 
 If an upstream change appears to conflict with one of these, prefer the upstream behavior in the
 engine/protocol and re-apply the wEXO presentation/identity layer on top - do not silently drop

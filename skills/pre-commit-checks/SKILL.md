@@ -29,6 +29,6 @@ Equivalent `just` targets: `just lint` (`ruff check --fix`), `just fmt`, `just c
 
 - `nix fmt` may rewrite files. If it does, **stage the formatting changes** before committing.
 - `uv run pytest` excludes slow tests; run everything with `uv run pytest -m ""`.
-- Single test: `uv run pytest src/exo/shared/tests/test_election.py::test_name`.
+- Single test: `uv run pytest src/wexo/shared/tests/test_election.py::test_name`.
 - `nix fmt` needs the dev shell (`.envrc`/direnv). If unavailable, `just fmt` falls back to `treefmt` then `nix fmt`.
 - CI only runs pytest on macOS; do not assume a green Linux run covers tests.

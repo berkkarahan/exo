@@ -416,7 +416,7 @@ struct ContentView: View {
         }
     }
 
-    /// Shows TB bridge status for all nodes from exo cluster state
+    /// Shows TB bridge status for all nodes from wexo cluster state
     private var clusterThunderboltBridgeView: some View {
         let bridgeStatuses = stateService.latestSnapshot?.nodeThunderboltBridge ?? [:]
         let localNodeId = stateService.localNodeId

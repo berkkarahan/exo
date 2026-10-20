@@ -1,0 +1,96 @@
+import sys
+import traceback
+from dataclasses import dataclass
+from typing import Self, cast
+
+import loguru
+
+from wexo.shared.types.events import Event
+from wexo.shared.types.tasks import Task, TaskId
+from wexo.shared.types.worker.instances import BoundInstance
+from wexo.utils.channels import ClosedResourceError, MpReceiver, MpSender
+from wexo.worker.engines.base import Builder
+
+logger: "loguru.Logger" = loguru.logger
+
+
+@dataclass(frozen=True)
+class RunnerTerminationError:
+    exception_type: str
+    exception_message: str
+    exception_repr: str
+    traceback: str
+
+    @classmethod
+    def from_exception(cls, e: Exception) -> Self:
+        return cls(
+            exception_type=type(e).__qualname__,
+            exception_message=str(e),
+            exception_repr=repr(e),
+            traceback="".join(
+                traceback.TracebackException.from_exception(e).format(chain=True)
+            ),
+        )
+
+    def __str__(self) -> str:
+        return f"{self.exception_type}: {self.exception_message}\n{self.traceback}"
+
+
+def _raise_file_descriptor_limit() -> None:
+    """Raise the open-file limit on Unix.
+
+    Windows has no ``resource`` module, so a runner started from the Windows
+    launcher skips this and continues.
+    """
+    if sys.platform == "win32":
+        return
+    import resource
+
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    resource.setrlimit(resource.RLIMIT_NOFILE, (min(max(soft, 2048), hard), hard))
+
+
+def entrypoint(
+    bound_instance: BoundInstance,
+    event_sender: MpSender[Event | RunnerTerminationError],
+    task_receiver: MpReceiver[Task],
+    cancel_receiver: MpReceiver[TaskId],
+    _logger: "loguru.Logger",
+) -> None:
+    global logger
+    logger = _logger
+
+    _raise_file_descriptor_limit()
+
+    # Import main after setting global logger - this lets us just import logger from this module
+    try:
+        event_sender_downcast: MpSender[Event] = cast(MpSender[Event], event_sender)
+
+        from wexo.backends.registry import resolve_builder
+        from wexo.worker.runner.runner import Runner
+
+        # evil sharing of the event sender
+        builder: Builder = resolve_builder(
+            bound_instance,
+            event_sender_downcast,
+            cancel_receiver,
+        )
+
+        runner = Runner(bound_instance, builder, event_sender_downcast, task_receiver)
+        runner.main()
+    except ClosedResourceError:
+        logger.warning("Runner communication closed unexpectedly")
+    except Exception as e:
+        logger.opt(exception=e).warning(
+            f"Runner {bound_instance.bound_runner_id} crashed with critical exception {e}"
+        )
+        event_sender.send(RunnerTerminationError.from_exception(e))
+        raise SystemExit(1) from e
+    finally:
+        try:
+            event_sender.close()
+            task_receiver.close()
+        finally:
+            event_sender.join()
+            task_receiver.join()
+            logger.info("bye from the runner")

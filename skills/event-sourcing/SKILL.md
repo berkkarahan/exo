@@ -1,6 +1,6 @@
 ---
 name: event-sourcing
-description: Add or modify wEXO events, commands, tasks, and state transitions following the event-sourcing architecture (State, apply(), TaggedModel events, topics). Use when adding a new event type, changing apply() or State, wiring master indexing and broadcast, or editing src/exo/shared/types or src/exo/shared/apply.py.
+description: Add or modify wEXO events, commands, tasks, and state transitions following the event-sourcing architecture (State, apply(), TaggedModel events, topics). Use when adding a new event type, changing apply() or State, wiring master indexing and broadcast, or editing src/wexo/shared/types or src/wexo/shared/apply.py.
 ---
 
 # Event Sourcing in wEXO
@@ -10,13 +10,13 @@ them through a pure `apply` to derive identical state.
 
 ## Core pieces
 
-- `State` - `src/exo/shared/types/state.py`. A `FrozenModel` (immutable). Never mutate in place;
+- `State` - `src/wexo/shared/types/state.py`. A `FrozenModel` (immutable). Never mutate in place;
   return a new instance via `model_copy(update=...)`.
-- `apply(state, event)` - `src/exo/shared/apply.py`. Pure. Asserts `last_event_applied_idx == event.idx - 1`,
+- `apply(state, event)` - `src/wexo/shared/apply.py`. Pure. Asserts `last_event_applied_idx == event.idx - 1`,
   dispatches via a `match` in `event_apply`, then bumps `last_event_applied_idx`.
-- Events - `src/exo/shared/types/events.py`. `BaseEvent(TaggedModel)` subclasses, unioned into `Event`.
+- Events - `src/wexo/shared/types/events.py`. `BaseEvent(TaggedModel)` subclasses, unioned into `Event`.
   `TaggedModel` serializes as `{"ClassName": {...}}`, so the class name is part of the wire format.
-- Topics - `src/exo/routing/topics.py`: `GLOBAL_EVENTS`, `LOCAL_EVENTS`, `COMMANDS`,
+- Topics - `src/wexo/routing/topics.py`: `GLOBAL_EVENTS`, `LOCAL_EVENTS`, `COMMANDS`,
   `ELECTION_MESSAGES`, `CONNECTION_MESSAGES`, `DOWNLOAD_COMMANDS`.
 
 ## Add a new event type
@@ -35,7 +35,7 @@ them through a pure `apply` to derive identical state.
 - Keep `apply` computationally pure. Side-effects (I/O, networking, spawning tasks) belong in injectable
   effect handlers passed into the otherwise-pure function - not inside `apply`.
 - Descriptive names: no 3-letter acronyms or non-standard contractions. Use `Literal[...]` for enum-like
-  sets and `NewType` for primitive IDs (see `src/exo/shared/types/common.py`).
+  sets and `NewType` for primitive IDs (see `src/wexo/shared/types/common.py`).
 - Idempotency tags are a salted hash of persisted state with a **unique salt per function**, so a resumed
   node cannot re-publish the same event under a different tag.
 

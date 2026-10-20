@@ -52,7 +52,7 @@ struct BugReportService {
 
         let stateData = try await fetch(url: baseURL.appendingPathComponent("state"))
 
-        // Extract cluster TB bridge status from exo state
+        // Extract cluster TB bridge status from wexo state
         let clusterTbBridgeStatus = extractClusterTbBridgeStatus(from: stateData)
 
         let reportJSON = makeReportJson(
@@ -332,7 +332,7 @@ struct BugReportService {
         return try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted])
     }
 
-    /// Extracts cluster-wide Thunderbolt Bridge status from exo state JSON
+    /// Extracts cluster-wide Thunderbolt Bridge status from wexo state JSON
     private func extractClusterTbBridgeStatus(from stateData: Data?) -> [[String: Any]]? {
         guard let data = stateData,
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],

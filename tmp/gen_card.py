@@ -10,7 +10,7 @@ import sys
 
 import anyio
 
-from exo.shared.models.model_cards import ModelCard, ModelId
+from wexo.shared.models.model_cards import ModelCard, ModelId
 
 
 async def main():

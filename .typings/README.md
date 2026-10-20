@@ -20,5 +20,5 @@ unknown types, `Any`, invalid casts, and unnecessary ignores remain checked.
 `pythonPlatform = "Darwin"` deliberately also checks the Unix branches on Windows.
 
 Run `uv run --no-sync basedpyright` after changing the stubs. The regression tests
-in `src/exo/tests/test_optional_backend_typing.py` check valid and invalid API
+in `src/wexo/tests/test_optional_backend_typing.py` check valid and invalid API
 usage without loading native runtimes.

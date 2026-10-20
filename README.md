@@ -2,10 +2,10 @@
 
 <picture>
   <source media="(prefers-color-scheme: light)" srcset="/docs/imgs/exo-logo-black-bg.jpg">
-  <img alt="exo logo" src="/docs/imgs/exo-logo-transparent.png" width="50%" height="50%">
+  <img alt="wexo logo" src="/docs/imgs/exo-logo-transparent.png" width="50%" height="50%">
 </picture>
 
-exo: Run frontier AI locally. Maintained by [exo labs](https://x.com/exolabs).
+wexo: Run frontier AI locally. Maintained by [exo labs](https://x.com/exolabs).
 
 <p align="center">
   <a href="https://discord.gg/TJ4P57arEm" target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/badge/Discord-Join%20Server-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
@@ -17,24 +17,24 @@ exo: Run frontier AI locally. Maintained by [exo labs](https://x.com/exolabs).
 
 ---
 
-exo connects all your devices into an AI cluster. Not only does exo enable running models larger than would fit on a single device, but with [day-0 support for RDMA over Thunderbolt](https://x.com/exolabs/status/2001817749744476256?s=20), makes models run faster as you add more devices.
+wexo connects all your devices into an AI cluster. Not only does wexo enable running models larger than would fit on a single device, but with [day-0 support for RDMA over Thunderbolt](https://x.com/exolabs/status/2001817749744476256?s=20), makes models run faster as you add more devices.
 
 ## Features
 
-- **Automatic Device Discovery**: Devices running exo automatically discover each other - no manual configuration.
-- **RDMA over Thunderbolt**: exo ships with [day-0 support for RDMA over Thunderbolt 5](https://x.com/exolabs/status/2001817749744476256?s=20), enabling 99% reduction in latency between devices.
-- **Topology-Aware Auto Parallel**: exo figures out the best way to split your model across all available devices based on a realtime view of your device topology. It takes into account device resources and network latency/bandwidth between each link.
-- **Tensor Parallelism**: exo supports sharding models, for up to 1.8x speedup on 2 devices and 3.2x speedup on 4 devices.
-- **Tinygrad Support**: exo uses [tinygrad](https://github.com/tinygrad/tinygrad) as the inference backend (GGUF models on OpenCL/CUDA/CPU devices) and zenoh for distributed communication.
+- **Automatic Device Discovery**: Devices running wexo automatically discover each other - no manual configuration.
+- **RDMA over Thunderbolt**: wexo ships with [day-0 support for RDMA over Thunderbolt 5](https://x.com/exolabs/status/2001817749744476256?s=20), enabling 99% reduction in latency between devices.
+- **Topology-Aware Auto Parallel**: wexo figures out the best way to split your model across all available devices based on a realtime view of your device topology. It takes into account device resources and network latency/bandwidth between each link.
+- **Tensor Parallelism**: wexo supports sharding models, for up to 1.8x speedup on 2 devices and 3.2x speedup on 4 devices.
+- **Tinygrad Support**: wexo uses [tinygrad](https://github.com/tinygrad/tinygrad) as the inference backend (GGUF models on OpenCL/CUDA/CPU devices) and zenoh for distributed communication.
 - **Multiple API Compatibility**: Compatible with OpenAI Chat Completions API, Claude Messages API, OpenAI Responses API, and Ollama API - use your existing tools and clients.
 - **Custom Model Support**: Load custom models from HuggingFace hub to expand the range of available models.
 
 ## Dashboard
 
-exo includes a built-in dashboard for managing your cluster and chatting with models.
+wexo includes a built-in dashboard for managing your cluster and chatting with models.
 
 <p align="center">
-  <img src="docs/imgs/dashboard-cluster-view.png" alt="exo dashboard - cluster view showing 4 x M3 Ultra Mac Studio with DeepSeek v3.1 and Kimi-K2-Thinking loaded" width="80%" />
+  <img src="docs/imgs/dashboard-cluster-view.png" alt="wexo dashboard - cluster view showing 4 x M3 Ultra Mac Studio with DeepSeek v3.1 and Kimi-K2-Thinking loaded" width="80%" />
 </p>
 <p align="center"><em>4 × 512GB M3 Ultra Mac Studio running DeepSeek v3.1 (8-bit) and Kimi-K2-Thinking (4-bit)</em></p>
 
@@ -68,16 +68,16 @@ exo includes a built-in dashboard for managing your cluster and chatting with mo
 
 ## Quick Start
 
-Devices running exo automatically discover each other, without needing any manual configuration. Each device provides an API and a dashboard for interacting with your cluster (runs at `http://localhost:52416`).
+Devices running wexo automatically discover each other, without needing any manual configuration. Each device provides an API and a dashboard for interacting with your cluster (runs at `http://localhost:52416`).
 
-There are two ways to run exo:
+There are two ways to run wexo:
 
 ### Run from Source (macOS)
 
-If you have [Nix](https://nixos.org/) installed, you can skip most of the steps below and run exo directly:
+If you have [Nix](https://nixos.org/) installed, you can skip most of the steps below and run wexo directly:
 
 ```bash
-nix run .#exo
+nix run .#wexo
 ```
 
 **Note:** To accept the Cachix binary cache (and avoid the Xcode Metal ToolChain), add to `/etc/nix/nix.conf`:
@@ -117,10 +117,10 @@ Then restart the Nix daemon: `sudo launchctl kickstart -k system/org.nixos.nix-d
     --force
   ```
 
-Clone the repo, build the dashboard, install the dependencies, and run exo:
+Clone the repo, build the dashboard, install the dependencies, and run wexo:
 
 ```bash
-# Clone exo
+# Clone wexo
 git clone https://github.com/exo-explore/exo
 
 # Build dashboard
@@ -129,11 +129,11 @@ cd exo/dashboard && npm install && npm run build && cd ..
 # Install Python dependencies, including the Tinygrad backend
 uv sync
 
-# Run exo
-uv run exo
+# Run wexo
+uv run wexo
 ```
 
-This starts the exo dashboard and API at http://localhost:52416/
+This starts the wexo dashboard and API at http://localhost:52416/
 
 
 *Please view the section on RDMA to enable this feature on MacOS >=26.2!*
@@ -178,10 +178,10 @@ rustup toolchain install nightly
 
 **Note:** The `macmon` package is macOS-only and not required for Linux.
 
-Clone the repo, build the dashboard, install the dependencies, and run exo:
+Clone the repo, build the dashboard, install the dependencies, and run wexo:
 
 ```bash
-# Clone exo
+# Clone wexo
 git clone https://github.com/exo-explore/exo
 
 # Build dashboard
@@ -190,31 +190,31 @@ cd exo/dashboard && npm install && npm run build && cd ..
 # Install Python dependencies (tinygrad runs on OpenCL/CUDA/CPU)
 uv sync --extra tinygrad
 
-# Run exo
-uv run exo
+# Run wexo
+uv run wexo
 ```
 
-This starts the exo dashboard and API at http://localhost:52416/
+This starts the wexo dashboard and API at http://localhost:52416/
 
-**Important note for Linux users:** Currently, exo runs on CPU on Linux. GPU support for Linux platforms is under development. If you'd like to see support for your specific Linux hardware, please [search for existing feature requests](https://github.com/exo-explore/exo/issues) or create a new one.
+**Important note for Linux users:** Currently, wexo runs on CPU on Linux. GPU support for Linux platforms is under development. If you'd like to see support for your specific Linux hardware, please [search for existing feature requests](https://github.com/exo-explore/exo/issues) or create a new one.
 
 **Configuration Options:**
 
-- `--no-worker`: Run exo without the worker component. Useful for coordinator-only nodes that handle networking and orchestration but don't execute inference tasks. This is helpful for machines without sufficient GPU resources but with good network connectivity.
+- `--no-worker`: Run wexo without the worker component. Useful for coordinator-only nodes that handle networking and orchestration but don't execute inference tasks. This is helpful for machines without sufficient GPU resources but with good network connectivity.
 
   ```bash
-  uv run exo --no-worker
+  uv run wexo --no-worker
   ```
 
-- `--legacy-daemon`: Run exo as a legacy SysV-style background daemon using double-fork daemonization. This is intended for legacy init scripts; systemd and launchd should run exo in the foreground without this flag.
+- `--legacy-daemon`: Run wexo as a legacy SysV-style background daemon using double-fork daemonization. This is intended for legacy init scripts; systemd and launchd should run wexo in the foreground without this flag.
 
   ```bash
-  uv run exo --legacy-daemon
+  uv run wexo --legacy-daemon
   ```
 
 **File Locations (Linux):**
 
-exo follows the [XDG Base Directory Specification](https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html) on Linux:
+wexo follows the [XDG Base Directory Specification](https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html) on Linux:
 
 - **Configuration files**: `~/.config/exo/` (or `$XDG_CONFIG_HOME/exo/`)
 - **Data files**: `~/.local/share/exo/` (or `$XDG_DATA_HOME/exo/`)
@@ -226,9 +226,9 @@ You can override these locations by setting the corresponding XDG environment va
 
 ### macOS App
 
-exo ships a macOS app that runs in the background on your Mac.
+wexo ships a macOS app that runs in the background on your Mac.
 
-<img src="docs/imgs/macos-app-one-macbook.png" alt="exo macOS App - running on a MacBook" width="35%" />
+<img src="docs/imgs/macos-app-one-macbook.png" alt="wexo macOS App - running on a MacBook" width="35%" />
 
 The macOS app requires macOS Tahoe 26.2 or later.
 
@@ -237,17 +237,17 @@ Download the latest build here: [EXO-latest.dmg](https://assets.exolabs.net/EXO-
 You can also install the latest build with Homebrew:
 
 ```bash
-brew install --cask exo
+brew install --cask wexo
 ```
 
 The app will ask for permission to modify system settings and install a new Network profile. Improvements to this are being worked on.
 
 **Custom Namespace for Cluster Isolation:**
 
-The macOS app includes a custom namespace feature that allows you to isolate your exo cluster from others on the same network. This is configured through the `EXO_LIBP2P_NAMESPACE` setting:
+The macOS app includes a custom namespace feature that allows you to isolate your wexo cluster from others on the same network. This is configured through the `EXO_LIBP2P_NAMESPACE` setting:
 
 - **Use cases**:
-  - Running multiple separate exo clusters on the same network
+  - Running multiple separate wexo clusters on the same network
   - Isolating development/testing clusters from production clusters
   - Preventing accidental cluster joining
 
@@ -269,7 +269,7 @@ This removes:
 - Network setup LaunchDaemon
 - Network configuration script
 - Log files
-- The "exo" network location
+- The "wexo" network location
 
 **Note:** You'll need to manually remove EXO from Login Items in System Settings → General → Login Items.
 
@@ -294,7 +294,7 @@ To enable RDMA on macOS, follow these steps:
    and press Enter.
 6. Reboot your Mac.
 
-After that, RDMA will be enabled in macOS and exo will take care of the rest.
+After that, RDMA will be enabled in macOS and wexo will take care of the rest.
 
 **Important Caveats**
 
@@ -308,7 +308,7 @@ After that, RDMA will be enabled in macOS and exo will take care of the rest.
 
 ## Environment Variables
 
-exo supports several environment variables for configuration:
+wexo supports several environment variables for configuration:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
@@ -325,33 +325,33 @@ exo supports several environment variables for configuration:
 
 ```bash
 # Use pre-downloaded models from NFS mount (read-only)
-EXO_MODELS_READ_ONLY_DIRS=/mnt/nfs/models:/opt/ai-models uv run exo
+EXO_MODELS_READ_ONLY_DIRS=/mnt/nfs/models:/opt/ai-models uv run wexo
 
 # Download models to an external SSD (falls back to default dir if full)
-EXO_MODELS_DIRS=/Volumes/ExternalSSD/exo-models uv run exo
+EXO_MODELS_DIRS=/Volumes/ExternalSSD/exo-models uv run wexo
 
 # Run in offline mode
-EXO_OFFLINE=true uv run exo
+EXO_OFFLINE=true uv run wexo
 
 # Enable image models
-EXO_ENABLE_IMAGE_MODELS=true uv run exo
+EXO_ENABLE_IMAGE_MODELS=true uv run wexo
 
 # Use custom namespace for cluster isolation
-EXO_LIBP2P_NAMESPACE=my-dev-cluster uv run exo
+EXO_LIBP2P_NAMESPACE=my-dev-cluster uv run wexo
 ```
 
 ---
 
 ### Using the API
 
-exo provides multiple API-compatible interfaces for maximum compatibility with existing tools:
+wexo provides multiple API-compatible interfaces for maximum compatibility with existing tools:
 
 - **OpenAI Chat Completions API** - Compatible with OpenAI clients
 - **Claude Messages API** - Compatible with Anthropic's Claude format
 - **OpenAI Responses API** - Compatible with OpenAI's Responses format
 - **Ollama API** - Compatible with Ollama and tools like OpenWebUI
 
-If you prefer to interact with exo via the API, here is an example creating an instance of a small model (`Qwen/Qwen2.5-0.5B-Instruct-GGUF`), sending a chat completions request and deleting the instance.
+If you prefer to interact with wexo via the API, here is an example creating an instance of a small model (`Qwen/Qwen2.5-0.5B-Instruct-GGUF`), sending a chat completions request and deleting the instance.
 
 ---
 
@@ -487,7 +487,7 @@ curl -N -X POST http://localhost:52416/v1/responses \
 
 ### Ollama API Compatibility
 
-exo supports Ollama API endpoints for compatibility with tools like OpenWebUI:
+wexo supports Ollama API endpoints for compatibility with tools like OpenWebUI:
 
 ```bash
 # Ollama chat
@@ -531,7 +531,7 @@ Custom models requiring `trust_remote_code` in their configuration must be expli
 For further details, see:
 
 - API documentation in [docs/api.md](docs/api.md).
-- API types and endpoints in [src/exo/master/api.py](src/exo/master/api.py).
+- API types and endpoints in [src/wexo/master/api.py](src/wexo/master/api.py).
 
 ---
 
@@ -540,7 +540,7 @@ For further details, see:
 The `exo-bench` tool measures model prefill and token generation speed across different placement configurations. This helps you optimize model performance and validate improvements.
 
 **Prerequisites:**
-- Nodes should be running with `uv run exo` before benchmarking
+- Nodes should be running with `uv run wexo` before benchmarking
 - The tool uses the `/bench/chat/completions` endpoint
 
 **Basic usage:**
@@ -583,10 +583,10 @@ The tool outputs performance metrics including prompt tokens per second (prompt_
 
 ## Hardware Accelerator Support
 
-On macOS, exo uses the GPU. On Linux, exo currently runs on CPU. We are working on extending hardware accelerator support. If you'd like support for a new hardware platform, please [search for an existing feature request](https://github.com/exo-explore/exo/issues) and add a thumbs up so we know what hardware is important to the community.
+On macOS, wexo uses the GPU. On Linux, wexo currently runs on CPU. We are working on extending hardware accelerator support. If you'd like support for a new hardware platform, please [search for an existing feature request](https://github.com/exo-explore/exo/issues) and add a thumbs up so we know what hardware is important to the community.
 
 ---
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to contribute to exo.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to contribute to wexo.

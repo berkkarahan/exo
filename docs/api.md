@@ -2,7 +2,7 @@
 
 This document describes the REST API exposed by the **EXO** service, as implemented in:
 
-`src/exo/master/api.py`
+`src/wexo/master/api.py`
 
 The API is used to manage model instances in the cluster, inspect cluster state, and perform inference using multiple API-compatible interfaces.
 
@@ -498,7 +498,7 @@ Returns version information for Ollama API compatibility.
 
 ```json
 {
-  "version": "exo v1.0"
+  "version": "wexo v1.0"
 }
 ```
 

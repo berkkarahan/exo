@@ -10,10 +10,10 @@ from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 PROJECT_ROOT = Path.cwd()
 SOURCE_ROOT = PROJECT_ROOT / "src"
-ENTRYPOINT = SOURCE_ROOT / "exo" / "__main__.py"
+ENTRYPOINT = SOURCE_ROOT / "wexo" / "__main__.py"
 DASHBOARD_DIR = PROJECT_ROOT / "dashboard" / "build"
 RESOURCES_DIR = PROJECT_ROOT / "resources"
-EXO_SHARED_MODELS_DIR = SOURCE_ROOT / "exo" / "shared" / "models"
+EXO_SHARED_MODELS_DIR = SOURCE_ROOT / "wexo" / "shared" / "models"
 
 if not ENTRYPOINT.is_file():
     raise SystemExit(f"Unable to locate Exo entrypoint: {ENTRYPOINT}")
@@ -63,7 +63,7 @@ HIDDEN_IMPORTS = sorted(
 DATAS: list[tuple[str, str]] = [
     (str(DASHBOARD_DIR), "dashboard"),
     (str(RESOURCES_DIR), "resources"),
-    (str(EXO_SHARED_MODELS_DIR), "exo/shared/models"),
+    (str(EXO_SHARED_MODELS_DIR), "wexo/shared/models"),
 ]
 
 BINARIES: list[tuple[str, str]] = []
@@ -93,7 +93,7 @@ if sys.platform == "darwin":
     if MACMON_PATH is None:
         raise SystemExit(
             "macmon binary not found in PATH. "
-            "Install the pinned fork used by exo via: "
+            "Install the pinned fork used by wexo via: "
             "cargo install --git https://github.com/vladkens/macmon "
             "--rev a1cd06b6cc0d5e61db24fd8832e74cd992097a7d macmon --force"
         )
@@ -126,7 +126,7 @@ exe = EXE(
     upx=False,
     console=sys.platform != "win32",
     icon=(
-        str(PROJECT_ROOT / "resources" / "exo.ico") if sys.platform == "win32" else None
+        str(PROJECT_ROOT / "resources" / "wexo.ico") if sys.platform == "win32" else None
     ),
     disable_windowed_traceback=False,
     argv_emulation=False,

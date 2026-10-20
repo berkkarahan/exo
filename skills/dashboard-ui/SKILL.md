@@ -15,7 +15,7 @@ cd dashboard && npm install && npm run build && cd ..
 # or: just build-dashboard
 
 # Start wEXO (serves dashboard + API at http://localhost:52416)
-uv run exo &
+uv run wexo &
 sleep 8
 ```
 

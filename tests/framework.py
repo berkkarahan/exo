@@ -30,7 +30,7 @@ from exo_tools.cluster import (
 )
 from exo_tools.harness import Sharding
 
-from exo.api.types.api import (
+from wexo.api.types.api import (
     ChatCompletionChoice,
     ChatCompletionRequest,
     ChatCompletionResponse,
