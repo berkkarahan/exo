@@ -89,19 +89,6 @@ if sys.platform == "win32":
     HIDDEN_IMPORTS = sorted(set(HIDDEN_IMPORTS + ["tkinter", "tkinter.ttk"]))
 
 if sys.platform == "darwin":
-    MLX_PACKAGE_DIR = _module_directory("mlx")
-    MLX_LIB_DIR = MLX_PACKAGE_DIR / "lib"
-    if not MLX_LIB_DIR.is_dir():
-        raise SystemExit(f"mlx Metal libraries are missing: {MLX_LIB_DIR}")
-    HIDDEN_IMPORTS = sorted(
-        set(
-            HIDDEN_IMPORTS
-            + collect_submodules("mlx")
-            + _safe_collect("mlx_lm")
-            + _safe_collect("mlx_vlm")
-        )
-    )
-    DATAS.append((str(MLX_LIB_DIR), "mlx/lib"))
     MACMON_PATH = shutil.which("macmon")
     if MACMON_PATH is None:
         raise SystemExit(

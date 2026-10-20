@@ -9,9 +9,6 @@ from exo.master.placement_memory import (
 from exo.master.placement_utils import (
     Cycle,
     filter_cycles_by_memory,
-    get_mlx_jaccl_coordinators,
-    get_mlx_jaccl_devices_matrix,
-    get_mlx_ring_hosts_by_node,
     get_shard_assignments,
     get_smallest_cycles,
     get_tinygrad_pipeline_hosts_by_node,
@@ -47,16 +44,12 @@ from exo.shared.types.worker.instances import (
     Instance,
     InstanceId,
     InstanceMeta,
-    MlxJacclInstance,
-    MlxRingInstance,
     TinygradInstance,
 )
 from exo.shared.types.worker.shards import Sharding
 from exo.utils.ports import random_ephemeral_port
 
 INSTANCE_META_BACKENDS: dict[InstanceMeta, list[Backend]] = {
-    InstanceMeta.MlxRing: [Backend.MlxMetal, Backend.MlxCuda, Backend.MlxCpu],
-    InstanceMeta.MlxJaccl: [Backend.MlxMetal],
     InstanceMeta.Tinygrad: [
         Backend.TinygradAmd,
         Backend.TinygradMetal,
@@ -174,12 +167,6 @@ def place_instance(
                 f"{f', num_key_value_heads={kv_heads}' if kv_heads is not None else ''}"
                 f" across candidate cycles"
             )
-    if command.sharding == Sharding.Pipeline and command.model_card.model_id == ModelId(
-        "mlx-community/DeepSeek-V3.1-8bit"
-    ):
-        raise ValueError(
-            "Pipeline parallelism is not supported for DeepSeek V3.1 (8-bit)"
-        )
     if (
         command.sharding == Sharding.Pipeline
         and command.model_card.base_model.startswith("Gemma 4")
@@ -217,27 +204,6 @@ def place_instance(
             f"{sorted(b.value for b in required_backends)} for {command.model_card.model_id}"
         )
 
-    rdma_ctl_status = node_rdma_ctl or {}
-
-    def _all_rdma_ctl_enabled(cycle: Cycle) -> bool:
-        return all(
-            ((status := rdma_ctl_status.get(node_id)) is not None and status.enabled)
-            for node_id in cycle
-        )
-
-    smallest_rdma_cycles = [
-        cycle
-        for cycle in smallest_cycles
-        if topology.is_rdma_cycle(cycle) and _all_rdma_ctl_enabled(cycle)
-    ]
-
-    if command.instance_meta == InstanceMeta.MlxJaccl:
-        if not smallest_rdma_cycles:
-            raise ValueError(
-                "Requested RDMA (MlxJaccl) but no RDMA-connected cycles available"
-            )
-        smallest_cycles = smallest_rdma_cycles
-
     cycles_with_leaf_nodes: list[Cycle] = [
         cycle
         for cycle in smallest_cycles
@@ -262,16 +228,6 @@ def place_instance(
         ),
     )
 
-    # One MLX node has no peers to reduce with, so it runs pipeline on ring.
-    # A one-node Tinygrad tensor shard keeps every layer on that device.
-    if len(selected_cycle) == 1 and command.instance_meta != InstanceMeta.Tinygrad:
-        command = command.model_copy(
-            update={
-                "instance_meta": InstanceMeta.MlxRing,
-                "sharding": Sharding.Pipeline,
-            }
-        )
-
     shard_assignments = get_shard_assignments(
         command.model_card, selected_cycle, command.sharding, placement_memory
     )
@@ -282,52 +238,6 @@ def place_instance(
     target_instances = dict(deepcopy(current_instances))
 
     match command.instance_meta:
-        case InstanceMeta.MlxJaccl:
-            # TODO(evan): shard assignments should contain information about ranks, this is ugly
-            def get_device_rank(node_id: NodeId) -> int:
-                runner_id = shard_assignments.node_to_runner[node_id]
-                shard_metadata = shard_assignments.runner_to_shard.get(runner_id)
-                assert shard_metadata is not None
-                return shard_metadata.device_rank
-
-            zero_node_ids = [
-                node_id
-                for node_id in selected_cycle.node_ids
-                if get_device_rank(node_id) == 0
-            ]
-            assert len(zero_node_ids) == 1
-            coordinator_node_id = zero_node_ids[0]
-
-            mlx_jaccl_devices = get_mlx_jaccl_devices_matrix(
-                [node_id for node_id in selected_cycle],
-                cycle_digraph,
-            )
-            mlx_jaccl_coordinators = get_mlx_jaccl_coordinators(
-                coordinator=coordinator_node_id,
-                coordinator_port=random_ephemeral_port(),
-                cycle_digraph=cycle_digraph,
-                node_network=node_network,
-            )
-            target_instances[instance_id] = MlxJacclInstance(
-                instance_id=instance_id,
-                shard_assignments=shard_assignments,
-                jaccl_devices=mlx_jaccl_devices,
-                jaccl_coordinators=mlx_jaccl_coordinators,
-            )
-        case InstanceMeta.MlxRing:
-            ephemeral_port = random_ephemeral_port()
-            hosts_by_node = get_mlx_ring_hosts_by_node(
-                selected_cycle=selected_cycle,
-                cycle_digraph=cycle_digraph,
-                ephemeral_port=ephemeral_port,
-                node_network=node_network,
-            )
-            target_instances[instance_id] = MlxRingInstance(
-                instance_id=instance_id,
-                shard_assignments=shard_assignments,
-                hosts_by_node=hosts_by_node,
-                ephemeral_port=ephemeral_port,
-            )
         case InstanceMeta.Tinygrad:
             device_backend_by_node = {
                 node_id: _select_tinygrad_backend(

@@ -19,7 +19,7 @@ from exo.utils.async_process import AsyncProcess
 from exo.utils.channels import channel, mp_channel
 from exo.worker.runner.bootstrap import RunnerTerminationError
 from exo.worker.runner.supervisor import RunnerStdioHandler, RunnerSupervisor
-from exo.worker.tests.unittests.conftest import get_bound_mlx_ring_instance
+from exo.worker.tests.unittests.conftest import get_bound_tinygrad_instance
 
 
 class _DeadProcess:
@@ -42,9 +42,9 @@ async def test_check_runner_emits_error_chunk_for_inflight_text_generation() -> 
     cancel_sender, _ = mp_channel[TaskId]()
     _, ev_recv = mp_channel[Event | RunnerTerminationError]()
 
-    bound_instance: BoundInstance = get_bound_mlx_ring_instance(
+    bound_instance: BoundInstance = get_bound_tinygrad_instance(
         instance_id=InstanceId("instance-a"),
-        model_id=ModelId("mlx-community/Llama-3.2-1B-Instruct-4bit"),
+        model_id=ModelId("exo-unittest/Llama-3.2-1B-Instruct-GGUF"),
         runner_id=RunnerId("runner-a"),
         node_id=NodeId("node-a"),
     )

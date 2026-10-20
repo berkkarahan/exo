@@ -65,7 +65,7 @@ def load_tokenizer_for_bench(model_id: str) -> Any:
     Load tokenizer for benchmarking, with special handling for Kimi models.
 
     Kimi uses a custom TikTokenTokenizer that transformers 5.x can't load via AutoTokenizer.
-    This function replicates the logic from utils_mlx.py for bench compatibility.
+    This function replicates exo's Kimi tokenizer-loading logic for bench compatibility.
     """
     model_id_lower = model_id.lower()
 
@@ -370,14 +370,9 @@ class PromptSizer:
                     messages, tokenize=True, add_generation_prompt=True
                 )
             except ValueError:
-                # Models without a Jinja chat template (e.g. DeepSeek V4 which
-                # ships its own Python encoder). Use the exo-side V4 encoder.
-                from exo.worker.engines.mlx.deepseek_v4_encoding import (
-                    encode_messages as encode_v4,
-                )
-
-                prompt = encode_v4(messages, thinking_mode="thinking")
-                ids = tokenizer.encode(prompt, add_special_tokens=False)
+                raise ValueError(
+                    "No Jinja chat template available for this model; cannot build prompts"
+                ) from None
             # Fix for transformers 5.x
             if hasattr(ids, "input_ids"):
                 ids = ids.input_ids

@@ -9,7 +9,6 @@ from exo.master.placement import (
 from exo.master.tests.conftest import (
     create_node_memory,
     create_node_network,
-    create_rdma_connection,
     create_socket_connection,
 )
 from exo.shared.models.model_cards import ModelCard, ModelId, ModelTask
@@ -23,19 +22,13 @@ from exo.shared.types.events import (
     TaskStatusUpdated,
 )
 from exo.shared.types.memory import Memory
-from exo.shared.types.multiaddr import Multiaddr
-from exo.shared.types.profiling import (
-    NetworkInterfaceInfo,
-    NodeNetworkInfo,
-    NodeRdmaCtlStatus,
-)
 from exo.shared.types.tasks import TaskId, TaskStatus, TextGeneration
 from exo.shared.types.text_generation import (
     InputMessage,
     InputMessageContent,
     TextGenerationTaskParams,
 )
-from exo.shared.types.topology import Connection, SocketConnection
+from exo.shared.types.topology import Connection
 from exo.shared.types.worker.downloads import (
     DownloadCompleted,
     DownloadFailed,
@@ -46,8 +39,6 @@ from exo.shared.types.worker.instances import (
     Instance,
     InstanceId,
     InstanceMeta,
-    MlxJacclInstance,
-    MlxRingInstance,
     TinygradInstance,
 )
 from exo.shared.types.worker.runners import ShardAssignments
@@ -60,11 +51,12 @@ from exo.shared.types.worker.shards import (
 
 @pytest.fixture
 def instance() -> Instance:
-    return MlxRingInstance(
+    return TinygradInstance(
         instance_id=InstanceId(),
         shard_assignments=ShardAssignments(
             model_id=ModelId("test-model"), runner_to_shard={}, node_to_runner={}
         ),
+        device_backend_by_node={},
         hosts_by_node={},
         ephemeral_port=50000,
     )
@@ -79,14 +71,14 @@ def model_card() -> ModelCard:
         hidden_size=30,
         supports_tensor=True,
         tasks=[ModelTask.TextGeneration],
-        backends=[Backend.MlxMetal],
+        backends=[Backend.TinygradMetal],
     )
 
 
 def _metal_only(
     node_memory: Mapping[NodeId, object],
 ) -> dict[NodeId, list[Backend]]:
-    return {node_id: [Backend.MlxMetal] for node_id in node_memory}
+    return {node_id: [Backend.TinygradMetal] for node_id in node_memory}
 
 
 def place_instance_command(model_card: ModelCard) -> PlaceInstance:
@@ -94,7 +86,7 @@ def place_instance_command(model_card: ModelCard) -> PlaceInstance:
         command_id=CommandId(),
         model_card=model_card,
         sharding=Sharding.Pipeline,
-        instance_meta=InstanceMeta.MlxRing,
+        instance_meta=InstanceMeta.Tinygrad,
         min_nodes=1,
     )
 
@@ -212,7 +204,7 @@ def test_get_instance_placements_one_node_exact_fit() -> None:
             hidden_size=1000,
             supports_tensor=True,
             tasks=[ModelTask.TextGeneration],
-            backends=[Backend.MlxMetal],
+            backends=[Backend.TinygradMetal],
         ),
     )
     placements = place_instance(
@@ -242,7 +234,7 @@ def test_get_instance_placements_one_node_fits_with_extra_memory() -> None:
             hidden_size=1000,
             supports_tensor=True,
             tasks=[ModelTask.TextGeneration],
-            backends=[Backend.MlxMetal],
+            backends=[Backend.TinygradMetal],
         ),
     )
     placements = place_instance(
@@ -272,7 +264,7 @@ def test_get_instance_placements_one_node_not_fit() -> None:
             hidden_size=1000,
             supports_tensor=True,
             tasks=[ModelTask.TextGeneration],
-            backends=[Backend.MlxMetal],
+            backends=[Backend.TinygradMetal],
         ),
     )
 
@@ -393,266 +385,6 @@ def test_placement_selects_leaf_nodes(
             node_id_d,
         )
     )
-
-
-def test_tensor_rdma_backend_connectivity_matrix(
-    model_card: ModelCard,
-):
-    # arrange
-    topology = Topology()
-    model_card = model_card.model_copy(
-        update={
-            "n_layers": 12,
-            "storage_size": Memory.from_bytes(1500),
-        }
-    )
-
-    node_a = NodeId()
-    node_b = NodeId()
-    node_c = NodeId()
-
-    node_memory = {
-        node_a: create_node_memory(500),
-        node_b: create_node_memory(500),
-        node_c: create_node_memory(500),
-    }
-
-    ethernet_interface = NetworkInterfaceInfo(
-        name="en0",
-        ip_address="10.0.0.1",
-    )
-    ethernet_conn = SocketConnection(
-        sink_multiaddr=Multiaddr(address="/ip4/10.0.0.1/tcp/8000")
-    )
-
-    node_network = {
-        node_a: NodeNetworkInfo(interfaces=[ethernet_interface]),
-        node_b: NodeNetworkInfo(interfaces=[ethernet_interface]),
-        node_c: NodeNetworkInfo(interfaces=[ethernet_interface]),
-    }
-
-    topology.add_node(node_a)
-    topology.add_node(node_b)
-    topology.add_node(node_c)
-
-    # RDMA connections (directed)
-    topology.add_connection(
-        Connection(source=node_a, sink=node_b, edge=create_rdma_connection(3))
-    )
-    topology.add_connection(
-        Connection(source=node_b, sink=node_a, edge=create_rdma_connection(3))
-    )
-    topology.add_connection(
-        Connection(source=node_b, sink=node_c, edge=create_rdma_connection(4))
-    )
-    topology.add_connection(
-        Connection(source=node_c, sink=node_b, edge=create_rdma_connection(4))
-    )
-    topology.add_connection(
-        Connection(source=node_a, sink=node_c, edge=create_rdma_connection(5))
-    )
-    topology.add_connection(
-        Connection(source=node_c, sink=node_a, edge=create_rdma_connection(5))
-    )
-
-    # Ethernet connections (directed)
-    topology.add_connection(Connection(source=node_a, sink=node_b, edge=ethernet_conn))
-    topology.add_connection(Connection(source=node_b, sink=node_c, edge=ethernet_conn))
-    topology.add_connection(Connection(source=node_c, sink=node_a, edge=ethernet_conn))
-    topology.add_connection(Connection(source=node_a, sink=node_c, edge=ethernet_conn))
-    topology.add_connection(Connection(source=node_b, sink=node_a, edge=ethernet_conn))
-    topology.add_connection(Connection(source=node_c, sink=node_b, edge=ethernet_conn))
-
-    cic = PlaceInstance(
-        sharding=Sharding.Tensor,
-        instance_meta=InstanceMeta.MlxJaccl,
-        command_id=CommandId(),
-        model_card=model_card,
-        min_nodes=1,
-    )
-
-    node_rdma_ctl = {
-        node_a: NodeRdmaCtlStatus(enabled=True),
-        node_b: NodeRdmaCtlStatus(enabled=True),
-        node_c: NodeRdmaCtlStatus(enabled=True),
-    }
-
-    # act
-    placements = place_instance(
-        cic,
-        topology,
-        {},
-        node_memory,
-        node_network,
-        _metal_only(node_memory),
-        node_rdma_ctl=node_rdma_ctl,
-    )
-
-    # assert
-    assert len(placements) == 1
-    instance_id = list(placements.keys())[0]
-    instance = placements[instance_id]
-
-    assert isinstance(instance, MlxJacclInstance)
-
-    assert instance.jaccl_devices is not None
-    assert instance.jaccl_coordinators is not None
-
-    matrix = instance.jaccl_devices
-    assert len(matrix) == 3
-    for i in range(3):
-        assert matrix[i][i] is None
-
-    assigned_nodes = list(instance.shard_assignments.node_to_runner.keys())
-    node_to_idx = {node_id: idx for idx, node_id in enumerate(assigned_nodes)}
-
-    idx_a = node_to_idx[node_a]
-    idx_b = node_to_idx[node_b]
-    idx_c = node_to_idx[node_c]
-
-    assert matrix[idx_a][idx_b] == "rdma_en3"
-    assert matrix[idx_b][idx_c] == "rdma_en4"
-    assert matrix[idx_c][idx_a] == "rdma_en5"
-
-    # Verify coordinators are set for all nodes
-    assert len(instance.jaccl_coordinators) == 3
-    for node_id in assigned_nodes:
-        assert node_id in instance.jaccl_coordinators
-        coordinator = instance.jaccl_coordinators[node_id]
-        assert ":" in coordinator
-        # Rank 0 node should use 0.0.0.0, others should use connection-specific IPs
-        if node_id == assigned_nodes[0]:
-            assert coordinator.startswith("0.0.0.0:")
-        else:
-            ip_part = coordinator.split(":")[0]
-            assert len(ip_part.split(".")) == 4
-
-
-def _build_three_node_rdma_topology() -> tuple[
-    Topology, NodeId, NodeId, NodeId, dict[NodeId, NodeNetworkInfo]
-]:
-    topology = Topology()
-    node_a = NodeId()
-    node_b = NodeId()
-    node_c = NodeId()
-
-    ethernet_interface = NetworkInterfaceInfo(name="en0", ip_address="10.0.0.1")
-    ethernet_conn = SocketConnection(
-        sink_multiaddr=Multiaddr(address="/ip4/10.0.0.1/tcp/8000")
-    )
-    node_network = {
-        node_a: NodeNetworkInfo(interfaces=[ethernet_interface]),
-        node_b: NodeNetworkInfo(interfaces=[ethernet_interface]),
-        node_c: NodeNetworkInfo(interfaces=[ethernet_interface]),
-    }
-
-    for n in (node_a, node_b, node_c):
-        topology.add_node(n)
-
-    rdma_pairs = [
-        (node_a, node_b, 3),
-        (node_b, node_a, 3),
-        (node_b, node_c, 4),
-        (node_c, node_b, 4),
-        (node_a, node_c, 5),
-        (node_c, node_a, 5),
-    ]
-    for src, sink, iface in rdma_pairs:
-        topology.add_connection(
-            Connection(source=src, sink=sink, edge=create_rdma_connection(iface))
-        )
-
-    socket_pairs = [
-        (node_a, node_b),
-        (node_b, node_c),
-        (node_c, node_a),
-        (node_a, node_c),
-        (node_b, node_a),
-        (node_c, node_b),
-    ]
-    for src, sink in socket_pairs:
-        topology.add_connection(Connection(source=src, sink=sink, edge=ethernet_conn))
-
-    return topology, node_a, node_b, node_c, node_network
-
-
-def test_place_mlx_jaccl_rejects_when_a_node_has_rdma_ctl_disabled(
-    model_card: ModelCard,
-):
-    # arrange
-    model_card = model_card.model_copy(
-        update={"n_layers": 12, "storage_size": Memory.from_bytes(1500)}
-    )
-    topology, node_a, node_b, node_c, node_network = _build_three_node_rdma_topology()
-    node_memory = {
-        node_a: create_node_memory(500),
-        node_b: create_node_memory(500),
-        node_c: create_node_memory(500),
-    }
-    node_rdma_ctl = {
-        node_a: NodeRdmaCtlStatus(enabled=True),
-        node_b: NodeRdmaCtlStatus(enabled=True),
-        node_c: NodeRdmaCtlStatus(enabled=False),
-    }
-    cic = PlaceInstance(
-        sharding=Sharding.Tensor,
-        instance_meta=InstanceMeta.MlxJaccl,
-        command_id=CommandId(),
-        model_card=model_card,
-        min_nodes=3,
-    )
-
-    # act / assert
-    with pytest.raises(
-        ValueError, match="Requested RDMA \\(MlxJaccl\\) but no RDMA-connected cycles"
-    ):
-        place_instance(
-            cic,
-            topology,
-            {},
-            node_memory,
-            node_network,
-            _metal_only(node_memory),
-            node_rdma_ctl=node_rdma_ctl,
-        )
-
-
-def test_place_mlx_jaccl_rejects_when_node_rdma_ctl_missing(model_card: ModelCard):
-    """A node with no observed rdma_ctl status must not participate in RDMA placement."""
-    # arrange
-    model_card = model_card.model_copy(
-        update={"n_layers": 12, "storage_size": Memory.from_bytes(1500)}
-    )
-    topology, node_a, node_b, node_c, node_network = _build_three_node_rdma_topology()
-    node_memory = {
-        node_a: create_node_memory(500),
-        node_b: create_node_memory(500),
-        node_c: create_node_memory(500),
-    }
-    # node_c has no rdma_ctl entry at all
-    node_rdma_ctl = {
-        node_a: NodeRdmaCtlStatus(enabled=True),
-        node_b: NodeRdmaCtlStatus(enabled=True),
-    }
-    cic = PlaceInstance(
-        sharding=Sharding.Tensor,
-        instance_meta=InstanceMeta.MlxJaccl,
-        command_id=CommandId(),
-        model_card=model_card,
-        min_nodes=3,
-    )
-
-    # act / assert
-    with pytest.raises(ValueError):
-        place_instance(
-            cic,
-            topology,
-            {},
-            node_memory,
-            node_network,
-            _metal_only(node_memory),
-            node_rdma_ctl=node_rdma_ctl,
-        )
 
 
 def _make_task(
@@ -980,7 +712,7 @@ def test_placement_rejects_when_model_backends_disjoint_from_engine(
         model_card.model_copy(update={"backends": [Backend.Vllm]})
     )
 
-    with pytest.raises(ValueError, match="cannot satisfy engine MlxRing"):
+    with pytest.raises(ValueError, match="cannot satisfy engine Tinygrad"):
         place_instance(
             cic, topology, {}, node_memory, node_network, _metal_only(node_memory)
         )
@@ -1010,15 +742,15 @@ def test_placement_rejects_when_only_some_nodes_support_backend(
     node_memory = {n: create_node_memory(500 * 1024) for n in (node_a, node_b, node_c)}
     node_network = {n: create_node_network() for n in (node_a, node_b, node_c)}
     node_backends = {
-        node_a: [Backend.MlxMetal],
-        node_b: [Backend.MlxMetal],
-        node_c: [Backend.MlxCuda],  # the lone CUDA-only node breaks the cycle
+        node_a: [Backend.TinygradMetal],
+        node_b: [Backend.TinygradMetal],
+        node_c: [Backend.TinygradCuda],  # the lone CUDA-only node breaks the cycle
     }
 
     cic = place_instance_command(
         model_card.model_copy(
             update={
-                "backends": [Backend.MlxMetal],
+                "backends": [Backend.TinygradMetal],
                 "n_layers": 12,
                 "storage_size": Memory.from_kb(1500),
             }
@@ -1027,42 +759,6 @@ def test_placement_rejects_when_only_some_nodes_support_backend(
 
     with pytest.raises(ValueError, match="No cycle where every node supports"):
         place_instance(cic, topology, {}, node_memory, node_network, node_backends)
-
-
-def test_mlx_jaccl_rejects_cuda_only_cycle(model_card: ModelCard):
-    topology, node_a, node_b, node_c, node_network = _build_three_node_rdma_topology()
-    node_memory = {n: create_node_memory(500) for n in (node_a, node_b, node_c)}
-    node_rdma_ctl = {
-        n: NodeRdmaCtlStatus(enabled=True) for n in (node_a, node_b, node_c)
-    }
-    node_backends = {n: [Backend.MlxCuda] for n in (node_a, node_b, node_c)}
-
-    cic = PlaceInstance(
-        sharding=Sharding.Tensor,
-        instance_meta=InstanceMeta.MlxJaccl,
-        command_id=CommandId(),
-        model_card=model_card.model_copy(
-            update={
-                "backends": [Backend.MlxMetal, Backend.MlxCuda],
-                "n_layers": 12,
-                "storage_size": Memory.from_bytes(1500),
-            }
-        ),
-        min_nodes=3,
-    )
-
-    with pytest.raises(ValueError, match="No cycle where every node supports"):
-        place_instance(
-            cic,
-            topology,
-            {},
-            node_memory,
-            node_network,
-            node_backends,
-            node_rdma_ctl=node_rdma_ctl,
-        )
-
-
 def _tinygrad_model_card() -> ModelCard:
     return ModelCard(
         model_id=ModelId("tinygrad-model"),
@@ -1136,7 +832,7 @@ def test_tinygrad_placement_uses_each_nodes_advertised_backend() -> None:
         node_memory,
         node_network,
         {
-            node_amd: [Backend.MlxMetal, Backend.TinygradAmd],
+            node_amd: [Backend.TinygradMetal, Backend.TinygradAmd],
             node_cuda: [Backend.TinygradCuda, Backend.TinygradAmd],
         },
     )
@@ -1147,7 +843,7 @@ def test_tinygrad_placement_uses_each_nodes_advertised_backend() -> None:
     assert instance.device_backend_by_node[node_cuda] == Backend.TinygradCuda
 
 
-def test_mlx_ring_rejects_a_windows_node() -> None:
+def test_placement_rejects_a_windows_node_when_the_model_card_is_mac_only() -> None:
     topology = Topology()
     mac_node = NodeId()
     windows_node = NodeId()
@@ -1161,13 +857,13 @@ def test_mlx_ring_rejects_a_windows_node() -> None:
         Connection(source=windows_node, sink=mac_node, edge=ethernet)
     )
     model_card = _tinygrad_model_card().model_copy(
-        update={"backends": [Backend.MlxMetal, Backend.MlxCuda, Backend.MlxCpu]}
+        update={"backends": [Backend.TinygradMetal, Backend.TinygradCuda, Backend.TinygradCpu]}
     )
     command = PlaceInstance(
         command_id=CommandId(),
         model_card=model_card,
         sharding=Sharding.Pipeline,
-        instance_meta=InstanceMeta.MlxRing,
+        instance_meta=InstanceMeta.Tinygrad,
         min_nodes=2,
     )
     with pytest.raises(ValueError, match="No cycle where every node supports"):
@@ -1184,7 +880,7 @@ def test_mlx_ring_rejects_a_windows_node() -> None:
                 windows_node: create_node_network(),
             },
             {
-                mac_node: [Backend.MlxMetal, Backend.MlxCpu],
+                mac_node: [Backend.TinygradMetal, Backend.TinygradCpu],
                 windows_node: [Backend.WinAMD],
             },
         )
@@ -1233,7 +929,7 @@ def test_tinygrad_placement_keeps_the_windows_join_identity() -> None:
             windows_node: create_node_network(),
         },
         {
-            mac_node: [Backend.MlxMetal, Backend.TinygradMetal],
+            mac_node: [Backend.TinygradMetal, Backend.TinygradMetal],
             windows_node: [Backend.WinAMD],
         },
     )
@@ -1243,7 +939,7 @@ def test_tinygrad_placement_keeps_the_windows_join_identity() -> None:
     assert instance.device_backend_by_node[windows_node] == Backend.WinAMD
 
 
-def test_tinygrad_placement_rejects_mlx_only_nodes() -> None:
+def test_tinygrad_placement_rejects_a_node_without_join_backends() -> None:
     topology = Topology()
     node_id = NodeId()
     topology.add_node(node_id)
@@ -1261,7 +957,7 @@ def test_tinygrad_placement_rejects_mlx_only_nodes() -> None:
             {},
             {node_id: create_node_memory(1000 * 1024)},
             {node_id: create_node_network()},
-            {node_id: [Backend.MlxMetal]},
+            {node_id: [Backend.Vllm]},
         )
 
 

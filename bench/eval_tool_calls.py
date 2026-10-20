@@ -866,22 +866,17 @@ def result_to_dict(result: ScenarioResult) -> dict[str, Any]:
     }
 
 
-_MULTI_NODE_PRIORITY: dict[tuple[str, str], int] = {
-    ("tensor", "jaccl"): 0,
-    ("pipeline", "jaccl"): 2,
-    ("pipeline", "ring"): 3,
-    ("tensor", "ring"): 4,
+_MULTI_NODE_PRIORITY: dict[str, int] = {
+    "tensor": 0,
+    "pipeline": 2,
 }
 _SINGLE_NODE_PRIORITY = 1
 
 
 def _placement_sort_key(p: dict[str, Any]) -> tuple[int, int]:
     sharding = p.get("sharding", "").lower()
-    meta = p.get("instance_meta", "").lower()
-    kind = (
-        "tensor" if "tensor" in sharding else "pipeline",
-        "jaccl" if "jaccl" in meta else "ring",
-    )
+
+    kind = "tensor" if "tensor" in sharding else "pipeline"
     n_nodes = nodes_used_in_instance(p["instance"])
     if n_nodes == 1:
         return (_SINGLE_NODE_PRIORITY, -n_nodes)
@@ -895,7 +890,7 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:
-  %(prog)s --model mlx-community/Qwen3-30B-A3B-4bit
+  %(prog)s --model Qwen/Qwen2.5-0.5B-Instruct-GGUF
   %(prog)s --model my-model --api openai --repeat 3
   %(prog)s --model my-model --api all --scenarios weather_simple calculator_multi_turn
   %(prog)s --model my-model --stdout

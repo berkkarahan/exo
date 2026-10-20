@@ -10,8 +10,8 @@ def stream_chat(host: str, query: str) -> None:
     url = f"http://{host}:52416/v1/chat/completions"
     headers = {"Content-Type": "application/json"}
     payload = {
-        "model": "mlx-community/Llama-3.2-1B-Instruct-4bit",
-        # "model": "mlx-community/Llama-3_3-Nemotron-Super-49B-v1_5-mlx-4Bit",
+        "model": "unsloth/Llama-3.2-1B-Instruct-GGUF",
+        
         "stream": True,
         "messages": [{"role": "user", "content": query}],
     }

@@ -1,14 +1,12 @@
 from collections.abc import Generator, Mapping
 
-from loguru import logger
-
 from exo.master.placement_memory import shard_placement_bytes
 from exo.shared.models.model_cards import ModelCard
 from exo.shared.topology import Topology
 from exo.shared.types.common import Host, NodeId
 from exo.shared.types.memory import Memory
 from exo.shared.types.profiling import MemoryUsage, NodeNetworkInfo
-from exo.shared.types.topology import Cycle, RDMAConnection, SocketConnection
+from exo.shared.types.topology import Cycle, SocketConnection
 from exo.shared.types.worker.runners import RunnerId, ShardAssignments
 from exo.shared.types.worker.shards import (
     CfgShardMetadata,
@@ -294,38 +292,6 @@ def get_shard_assignments(
             )
 
 
-def get_mlx_jaccl_devices_matrix(
-    selected_cycle: list[NodeId],
-    cycle_digraph: Topology,
-) -> list[list[str | None]]:
-    """Build connectivity matrix mapping device i to device j via RDMA interface names.
-
-    The matrix element [i][j] contains the interface name on device i that connects
-    to device j, or None if no connection exists or no interface name is found.
-    Diagonal elements are always None.
-    """
-    num_nodes = len(selected_cycle)
-    matrix: list[list[str | None]] = [
-        [None for _ in range(num_nodes)] for _ in range(num_nodes)
-    ]
-
-    for i, node_i in enumerate(selected_cycle):
-        for j, node_j in enumerate(selected_cycle):
-            if i == j:
-                continue
-
-            for conn in cycle_digraph.get_all_connections_between(node_i, node_j):
-                if isinstance(conn, RDMAConnection):
-                    matrix[i][j] = conn.source_rdma_iface
-                    break
-            else:
-                raise ValueError(
-                    "Current jaccl backend requires all-to-all RDMA connections"
-                )
-
-    return matrix
-
-
 def _find_connection_ip(
     node_i: NodeId,
     node_j: NodeId,
@@ -426,86 +392,3 @@ def get_tinygrad_pipeline_hosts_by_node(
             hosts_for_node.append(Host(ip=connection_ip, port=ephemeral_port))
         hosts_by_node[node_id] = hosts_for_node
     return hosts_by_node
-
-
-def get_mlx_ring_hosts_by_node(
-    selected_cycle: Cycle,
-    cycle_digraph: Topology,
-    ephemeral_port: int,
-    node_network: Mapping[NodeId, NodeNetworkInfo],
-) -> dict[NodeId, list[Host]]:
-    """Generate per-node host lists for MLX ring backend.
-
-    Each node gets a list where:
-    - Self position: Host(ip="0.0.0.0", port=ephemeral_port)
-    - Left/right neighbors: actual connection IPs
-    - Non-neighbors: Host(ip="198.51.100.1", port=0) placeholder (RFC 5737 TEST-NET-2)
-    """
-    world_size = len(selected_cycle)
-    if world_size == 0:
-        return {}
-
-    hosts_by_node: dict[NodeId, list[Host]] = {}
-
-    for rank, node_id in enumerate(selected_cycle):
-        left_rank = (rank - 1) % world_size
-        right_rank = (rank + 1) % world_size
-
-        hosts_for_node: list[Host] = []
-
-        for idx, other_node_id in enumerate(selected_cycle):
-            if idx == rank:
-                hosts_for_node.append(Host(ip="0.0.0.0", port=ephemeral_port))
-                continue
-
-            if idx not in {left_rank, right_rank}:
-                # Placeholder IP from RFC 5737 TEST-NET-2
-                hosts_for_node.append(Host(ip="198.51.100.1", port=0))
-                continue
-
-            connection_ip = find_ip_prioritised(
-                node_id, other_node_id, cycle_digraph, node_network, ring=True
-            )
-            if connection_ip is None:
-                raise ValueError(
-                    "MLX ring backend requires connectivity between neighbouring nodes"
-                )
-
-            hosts_for_node.append(Host(ip=connection_ip, port=ephemeral_port))
-
-        hosts_by_node[node_id] = hosts_for_node
-
-    return hosts_by_node
-
-
-def get_mlx_jaccl_coordinators(
-    coordinator: NodeId,
-    coordinator_port: int,
-    cycle_digraph: Topology,
-    node_network: Mapping[NodeId, NodeNetworkInfo],
-) -> dict[NodeId, str]:
-    """Get the coordinator addresses for MLX JACCL (rank 0 device).
-
-    Select an IP address that each node can reach for the rank 0 node. Returns
-    address in format "X.X.X.X:PORT" per node.
-    """
-    logger.debug(f"Selecting coordinator: {coordinator}")
-
-    def get_ip_for_node(n: NodeId) -> str:
-        if n == coordinator:
-            return "0.0.0.0"
-
-        ip = find_ip_prioritised(
-            n, coordinator, cycle_digraph, node_network, ring=False
-        )
-        if ip is not None:
-            return ip
-
-        raise ValueError(
-            "Current jaccl backend requires all participating devices to be able to communicate"
-        )
-
-    return {
-        n: f"{get_ip_for_node(n)}:{coordinator_port}"
-        for n in cycle_digraph.list_nodes()
-    }

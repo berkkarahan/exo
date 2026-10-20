@@ -574,17 +574,11 @@
       </span>
       <span
         class="px-1.5 py-0.5 text-xs font-mono tracking-wider uppercase bg-wEXO-medium-gray/30 text-wEXO-light-gray border border-wEXO-medium-gray/40"
-        title={runtime === "MlxRing"
-          ? "Ring: standard networking. Works over any connection (Wi-Fi, Ethernet, Thunderbolt)."
-          : runtime === "Tinygrad"
-            ? "Tinygrad: local OpenCL, CUDA, or CPU inference."
-            : "RDMA: direct memory access over Thunderbolt. Significantly faster for multi-device inference."}
+        title={runtime === "Tinygrad"
+          ? "Tinygrad: local OpenCL, CUDA, or CPU inference."
+          : "Inference runtime."}
       >
-        {runtime === "MlxRing"
-          ? "MLX Ring"
-          : runtime === "MlxJaccl"
-            ? "MLX RDMA"
-            : "Tinygrad"}
+        {runtime}
       </span>
     </div>
 

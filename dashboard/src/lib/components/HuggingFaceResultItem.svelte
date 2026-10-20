@@ -36,12 +36,7 @@
     return num.toString();
   }
 
-  // Show short name for mlx-community models, full ID for everything else
-  const modelName = $derived(
-    model.author === "mlx-community"
-      ? model.id.split("/").pop() || model.id
-      : model.id,
-  );
+  const modelName = $derived(model.id);
 </script>
 
 <div

@@ -505,10 +505,9 @@ def _refuse_incompatible_node(
 ) -> State:
     """Drop ``node_id`` and remember the backends that failed the join check.
 
-    A Mac that advertises MLX stays out of a Windows cluster. A Windows node
-    stays out of a Mac cluster that was started with MLX. The next
-    ``NodeBackends`` event is checked again, so choosing tinygrad and
-    restarting can admit the same node.
+    A node whose backends share no runtime stays out of the cluster. A
+    refused node can rejoin once its next ``NodeBackends`` event advertises
+    the cluster's runtime.
     """
     topology = copy.deepcopy(state.topology)
     topology.remove_node(node_id)

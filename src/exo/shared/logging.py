@@ -91,7 +91,7 @@ def logger_cleanup():
     logger.complete()
 
 
-""" --- TODO: Capture MLX Log output:
+""" --- TODO: Capture inference engine log output:
 import contextlib
 import sys
 from loguru import logger

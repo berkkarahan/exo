@@ -13,7 +13,7 @@ QUERY="$*"
 curl -sN -X POST "http://$HOST:52416/v1/chat/completions" \
   -H "Content-Type: application/json" \
   -d "{
-        \"model\": \"mlx-community/Kimi-K2-Thinking\",
+        \"model\": \"moonshotai/Kimi-K2.7-Code\",
         \"stream\": true,
         \"messages\": [{ \"role\": \"user\",   \"content\": \"$QUERY\"}]
       }" |

@@ -36,10 +36,7 @@ from exo.utils.pydantic_ext import FrozenModel
 # kinda ugly...
 # TODO: load search path from config.toml
 _custom_cards_dir = Path(str(EXO_CUSTOM_MODEL_CARDS_DIR))
-_BUILTIN_CARD_DIRS = [
-    Path(RESOURCES_DIR) / "inference_model_cards",
-    Path(RESOURCES_DIR) / "image_model_cards",
-]
+_BUILTIN_CARD_DIRS = [Path(RESOURCES_DIR) / "inference_model_cards"]
 
 
 class _CardCache:

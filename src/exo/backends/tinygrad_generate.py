@@ -18,14 +18,14 @@ from exo.api.types import (
     Usage,
 )
 from exo.backends.tinygrad_weights import TinygradWeightError
+from exo.shared.constants import EXO_MAX_COMPLETION_TOKENS
 from exo.shared.types.memory import Memory
-from exo.worker.engines.mlx.constants import MAX_TOKENS
 
 
 def completion_token_limit(max_output_tokens: int | None) -> int:
     """Return how many completion tokens a request may emit."""
     if max_output_tokens is None:
-        return MAX_TOKENS
+        return EXO_MAX_COMPLETION_TOKENS
     return max_output_tokens
 
 

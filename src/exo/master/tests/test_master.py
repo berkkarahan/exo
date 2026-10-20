@@ -41,8 +41,8 @@ from exo.shared.types.text_generation import (
 )
 from exo.shared.types.worker.instances import (
     InstanceMeta,
-    MlxRingInstance,
     ShardAssignments,
+    TinygradInstance,
 )
 from exo.shared.types.worker.shards import PipelineShardMetadata, Sharding
 from exo.utils.channels import channel
@@ -135,7 +135,7 @@ async def test_master(tmp_path: Path, monkeypatch: MonkeyPatch):
                     NodeGatheredInfo(
                         when=str(datetime.now(tz=timezone.utc)),
                         node_id=node_id,
-                        info=NodeBackends(backends=[Backend.MlxMetal]),
+                        info=NodeBackends(backends=[Backend.TinygradMetal]),
                     )
                 ),
             )
@@ -164,10 +164,10 @@ async def test_master(tmp_path: Path, monkeypatch: MonkeyPatch):
                             hidden_size=7168,
                             supports_tensor=True,
                             tasks=[ModelTask.TextGeneration],
-                            backends=[Backend.MlxMetal],
+                            backends=[Backend.TinygradMetal],
                         ),
                         sharding=Sharding.Pipeline,
-                        instance_meta=InstanceMeta.MlxRing,
+                        instance_meta=InstanceMeta.Tinygrad,
                         min_nodes=1,
                     )
                 ),
@@ -209,7 +209,7 @@ async def test_master(tmp_path: Path, monkeypatch: MonkeyPatch):
         assert isinstance(events[1].event, NodeGatheredInfo)
         assert isinstance(events[2].event, InstanceCreated)
         created_instance = events[2].event.instance
-        assert isinstance(created_instance, MlxRingInstance)
+        assert isinstance(created_instance, TinygradInstance)
         runner_id = list(created_instance.shard_assignments.runner_to_shard.keys())[0]
         # Validate the shard assignments
         expected_shard_assignments = ShardAssignments(
@@ -226,7 +226,7 @@ async def test_master(tmp_path: Path, monkeypatch: MonkeyPatch):
                         hidden_size=7168,
                         supports_tensor=True,
                         tasks=[ModelTask.TextGeneration],
-                        backends=[Backend.MlxMetal],
+                        backends=[Backend.TinygradMetal],
                     ),
                     device_rank=0,
                     world_size=1,

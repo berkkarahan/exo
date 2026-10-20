@@ -1,7 +1,7 @@
 """
 Generates inference model cards for EXO.
 Usage:
-    uv run tmp/gen_card.py mlx-community/my_cool_model-8bit [repo-id/model-id-2] [...]
+    uv run tmp/gen_card.py myorg/my_cool_model-GGUF [repo-id/model-id-2] [...]
 
 Model Cards require cleanup for family & quantization data
 """

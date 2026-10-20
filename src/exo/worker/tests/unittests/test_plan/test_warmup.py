@@ -20,8 +20,8 @@ from exo.worker.tests.constants import (
 )
 from exo.worker.tests.unittests.conftest import (
     FakeRunnerSupervisor,
-    get_mlx_ring_instance,
     get_pipeline_shard_metadata,
+    get_tinygrad_instance,
 )
 
 
@@ -33,7 +33,7 @@ def test_plan_starts_warmup_for_accepting_rank_when_all_loaded_or_warming():
     shard0 = get_pipeline_shard_metadata(MODEL_A_ID, device_rank=0, world_size=3)
     shard1 = get_pipeline_shard_metadata(MODEL_A_ID, device_rank=1, world_size=3)
     shard2 = get_pipeline_shard_metadata(MODEL_A_ID, device_rank=2, world_size=3)
-    instance = get_mlx_ring_instance(
+    instance = get_tinygrad_instance(
         instance_id=INSTANCE_1_ID,
         model_id=MODEL_A_ID,
         node_to_runner={NODE_A: RUNNER_1_ID, NODE_B: RUNNER_2_ID, NODE_C: RUNNER_3_ID},
@@ -79,7 +79,7 @@ def test_plan_starts_warmup_for_rank_zero_after_others_warming():
     """
     shard0 = get_pipeline_shard_metadata(MODEL_A_ID, device_rank=0, world_size=2)
     shard1 = get_pipeline_shard_metadata(MODEL_A_ID, device_rank=1, world_size=2)
-    instance = get_mlx_ring_instance(
+    instance = get_tinygrad_instance(
         instance_id=INSTANCE_1_ID,
         model_id=MODEL_A_ID,
         node_to_runner={NODE_A: RUNNER_1_ID, NODE_B: RUNNER_2_ID},
@@ -123,7 +123,7 @@ def test_plan_does_not_start_warmup_for_non_zero_rank_until_all_loaded_or_warmin
     """
     shard0 = get_pipeline_shard_metadata(MODEL_A_ID, device_rank=0, world_size=2)
     shard1 = get_pipeline_shard_metadata(MODEL_A_ID, device_rank=1, world_size=2)
-    instance = get_mlx_ring_instance(
+    instance = get_tinygrad_instance(
         instance_id=INSTANCE_1_ID,
         model_id=MODEL_A_ID,
         node_to_runner={NODE_A: RUNNER_1_ID, NODE_B: RUNNER_2_ID},
@@ -170,7 +170,7 @@ def test_plan_does_not_start_warmup_for_rank_zero_until_others_warming():
     """
     shard0 = get_pipeline_shard_metadata(MODEL_A_ID, device_rank=0, world_size=2)
     shard1 = get_pipeline_shard_metadata(MODEL_A_ID, device_rank=1, world_size=2)
-    instance = get_mlx_ring_instance(
+    instance = get_tinygrad_instance(
         instance_id=INSTANCE_1_ID,
         model_id=MODEL_A_ID,
         node_to_runner={NODE_A: RUNNER_1_ID, NODE_B: RUNNER_2_ID},
@@ -237,7 +237,7 @@ def test_plan_starts_warmup_for_connecting_rank_after_others_warming():
     """
     shard0 = get_pipeline_shard_metadata(MODEL_A_ID, device_rank=0, world_size=2)
     shard1 = get_pipeline_shard_metadata(MODEL_A_ID, device_rank=1, world_size=2)
-    instance = get_mlx_ring_instance(
+    instance = get_tinygrad_instance(
         instance_id=INSTANCE_1_ID,
         model_id=MODEL_A_ID,
         node_to_runner={NODE_A: RUNNER_1_ID, NODE_B: RUNNER_2_ID},
@@ -283,7 +283,7 @@ def test_plan_does_not_start_warmup_for_accepting_rank_until_all_loaded_or_warmi
     """
     shard0 = get_pipeline_shard_metadata(MODEL_A_ID, device_rank=0, world_size=2)
     shard1 = get_pipeline_shard_metadata(MODEL_A_ID, device_rank=1, world_size=2)
-    instance = get_mlx_ring_instance(
+    instance = get_tinygrad_instance(
         instance_id=INSTANCE_1_ID,
         model_id=MODEL_A_ID,
         node_to_runner={NODE_A: RUNNER_1_ID, NODE_B: RUNNER_2_ID},
@@ -328,7 +328,7 @@ def test_plan_does_not_start_warmup_for_connecting_rank_until_others_warming():
     """
     shard0 = get_pipeline_shard_metadata(MODEL_A_ID, device_rank=0, world_size=2)
     shard1 = get_pipeline_shard_metadata(MODEL_A_ID, device_rank=1, world_size=2)
-    instance = get_mlx_ring_instance(
+    instance = get_tinygrad_instance(
         instance_id=INSTANCE_1_ID,
         model_id=MODEL_A_ID,
         node_to_runner={NODE_A: RUNNER_1_ID, NODE_B: RUNNER_2_ID},

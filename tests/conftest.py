@@ -4,9 +4,9 @@
 Test authors declare requirements via markers:
 
     @pytest.mark.cluster(count=2, thunderbolt='a2a')
-    @pytest.mark.instance('mlx-community/Llama-3.2-1B-Instruct-4bit',
-                          sharding='tensor', comm='jaccl')
-    def test_jaccl_inference(session):
+    @pytest.mark.instance('Qwen/Qwen2.5-0.5B-Instruct-GGUF',
+                          sharding='tensor')
+    def test_tensor_inference(session):
         resp = session.chat('What is 2+2?')
         assert '4' in resp
 
@@ -61,7 +61,7 @@ def pytest_configure(config):
     )
     config.addinivalue_line(
         "markers",
-        "instance(model_id, sharding=Sharding, comm=Comm, min_nodes=N): "
+        "instance(model_id, sharding=Sharding, min_nodes=N): "
         "declare instance placement for a test",
     )
 
@@ -124,7 +124,7 @@ def session(request, _host_pool) -> Session:
             client,
             instance_spec.model_id,
             sharding=instance_spec.sharding,
-            comm=instance_spec.comm,
+
             min_nodes=instance_spec.min_nodes,
         )
 

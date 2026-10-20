@@ -30,8 +30,6 @@ BackendName = Annotated[Backend, BeforeValidator(_backend_from_name)]
 
 
 class InstanceMeta(str, Enum):
-    MlxRing = "MlxRing"
-    MlxJaccl = "MlxJaccl"
     Tinygrad = "Tinygrad"
 
 
@@ -41,16 +39,6 @@ class BaseInstance(TaggedModel):
 
     def shard(self, runner_id: RunnerId) -> ShardMetadata | None:
         return self.shard_assignments.runner_to_shard.get(runner_id, None)
-
-
-class MlxRingInstance(BaseInstance):
-    hosts_by_node: dict[NodeId, list[Host]]
-    ephemeral_port: int
-
-
-class MlxJacclInstance(BaseInstance):
-    jaccl_devices: list[list[str | None]]
-    jaccl_coordinators: dict[NodeId, str]
 
 
 class TinygradInstance(BaseInstance):
@@ -83,8 +71,7 @@ class TinygradInstance(BaseInstance):
             ) from error
 
 
-# TODO: Single node instance
-Instance = MlxRingInstance | MlxJacclInstance | TinygradInstance
+Instance = TinygradInstance
 
 
 class BoundInstance(FrozenModel):

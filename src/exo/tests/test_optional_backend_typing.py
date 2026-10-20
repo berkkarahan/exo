@@ -32,15 +32,11 @@ def test_optional_backend_contracts_work_without_native_imports(tmp_path: Path) 
         tmp_path,
         """
 from exo_rs import Pidfile
-from mlx_lm.models.llama import Model
-from mlx_lm.models.glm4_moe_lite import Model as GlmModel
 from onnxruntime_genai.models.builder import create_model
 
-def check(model: Model, glm_model: GlmModel, pidfile: Pidfile) -> None:
-    heads: int = model.layers[0].self_attn.n_heads
-    experts: int = glm_model.layers[0].self_attn.num_heads
+def check(pidfile: Pidfile) -> None:
     descriptor: int = pidfile.as_raw_fd()
-    print(heads, experts, descriptor)
+    print(descriptor)
     create_model("llama", "input", "output", "int4", "cpu", "cache", int4_block_size=32)
 """,
     )
@@ -50,12 +46,6 @@ def check(model: Model, glm_model: GlmModel, pidfile: Pidfile) -> None:
 @pytest.mark.parametrize(
     ("source", "diagnostic"),
     [
-        (
-            "from mlx_lm.models.llama import Model\n"
-            "def check(model: Model) -> None:\n"
-            "    model.layers[0].self_attn.n_heads = 'not an integer'\n",
-            "reportAttributeAccessIssue",
-        ),
         (
             "from onnxruntime_genai.models.builder import create_model\n"
             "create_model(123, 'input', 'output', 'int4', 'cpu', 'cache')\n",

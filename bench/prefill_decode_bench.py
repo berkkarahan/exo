@@ -1,8 +1,8 @@
 # type: ignore
 #!/usr/bin/env python3
-"""Disaggregated prefill-decode benchmark for exo (MLX → MLX).
+"""Disaggregated prefill-decode benchmark for exo (tinygrad → tinygrad).
 
-Spins up two MLX instances on the cluster, marks one as Prefill source and
+Spins up two tinygrad instances on the cluster, marks one as Prefill source and
 the other as Decode target via /v1/instance-links, then sends chat
 completions to the API. The master routes the request to the decode
 instance and stamps `prefill_endpoint` pointing at the prefill instance —
@@ -107,7 +107,6 @@ _TOP_LEVEL_TOML_KEYS = {
     "repeat",
     "warmup",
     "json_out",
-    "instance_meta",
     "sharding",
     "min_nodes",
     "max_nodes",
@@ -180,12 +179,9 @@ def _side_args(
 ) -> argparse.Namespace:
     out = copy.copy(base)
     for k in (
-        "instance_meta",
         "sharding",
         "min_nodes",
         "max_nodes",
-        "skip_pipeline_jaccl",
-        "skip_tensor_ring",
     ):
         if k in overrides:
             setattr(out, k, overrides[k])
@@ -391,7 +387,7 @@ def main() -> int:
     _inject_toml_into_argv()
     ap = argparse.ArgumentParser(
         prog="prefill-decode-bench",
-        description="Benchmark MLX-MLX disaggregated prefill/decode via instance links.",
+        description="Benchmark tinygrad-tinygrad disaggregated prefill/decode via instance links.",
     )
     add_common_instance_args(ap)
     ap.add_argument(
@@ -553,7 +549,7 @@ def main() -> int:
             pair = _pick_two_distinct_placements(placements)
             if pair is None:
                 logger.error(
-                    "Need at least two distinct-node MLX placements for the same model."
+                    "Need at least two distinct-node tinygrad placements for the same model."
                 )
                 return 1
             prefill_p, decode_p = pair

@@ -20,8 +20,8 @@ from exo.worker.tests.constants import (
 )
 from exo.worker.tests.unittests.conftest import (
     FakeRunnerSupervisor,
-    get_mlx_ring_instance,
     get_pipeline_shard_metadata,
+    get_tinygrad_instance,
 )
 
 
@@ -31,7 +31,7 @@ def test_plan_kills_runner_when_instance_missing():
     plan() should return a Shutdown for that runner.
     """
     shard = get_pipeline_shard_metadata(model_id=MODEL_A_ID, device_rank=0)
-    instance = get_mlx_ring_instance(
+    instance = get_tinygrad_instance(
         instance_id=INSTANCE_1_ID,
         model_id=MODEL_A_ID,
         node_to_runner={NODE_A: RUNNER_1_ID},
@@ -71,7 +71,7 @@ def test_plan_kills_runner_when_sibling_failed():
     """
     shard1 = get_pipeline_shard_metadata(MODEL_A_ID, device_rank=0, world_size=2)
     shard2 = get_pipeline_shard_metadata(MODEL_A_ID, device_rank=1, world_size=2)
-    instance = get_mlx_ring_instance(
+    instance = get_tinygrad_instance(
         instance_id=INSTANCE_1_ID,
         model_id=MODEL_A_ID,
         node_to_runner={NODE_A: RUNNER_1_ID, NODE_B: RUNNER_2_ID},
@@ -113,7 +113,7 @@ def test_plan_creates_runner_when_missing_for_node():
     a local supervisor yet, plan() should emit a CreateRunner.
     """
     shard = get_pipeline_shard_metadata(model_id=MODEL_A_ID, device_rank=0)
-    instance = get_mlx_ring_instance(
+    instance = get_tinygrad_instance(
         instance_id=INSTANCE_1_ID,
         model_id=MODEL_A_ID,
         node_to_runner={NODE_A: RUNNER_1_ID},
@@ -151,7 +151,7 @@ def test_plan_does_not_create_runner_when_supervisor_already_present():
     plan() should not emit a CreateRunner again.
     """
     shard = get_pipeline_shard_metadata(model_id=MODEL_A_ID, device_rank=0)
-    instance = get_mlx_ring_instance(
+    instance = get_tinygrad_instance(
         instance_id=INSTANCE_1_ID,
         model_id=MODEL_A_ID,
         node_to_runner={NODE_A: RUNNER_1_ID},
@@ -188,7 +188,7 @@ def test_plan_does_not_create_runner_for_unassigned_node():
     plan() should not try to create a runner on this node.
     """
     shard = get_pipeline_shard_metadata(model_id=MODEL_A_ID, device_rank=0)
-    instance = get_mlx_ring_instance(
+    instance = get_tinygrad_instance(
         instance_id=INSTANCE_1_ID,
         model_id=MODEL_A_ID,
         node_to_runner={NODE_B: RUNNER_2_ID},

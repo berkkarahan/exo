@@ -27,8 +27,8 @@ from exo.worker.tests.constants import (
 from exo.worker.tests.unittests.conftest import (
     FakeRunnerSupervisor,
     OtherTask,
-    get_mlx_ring_instance,
     get_pipeline_shard_metadata,
+    get_tinygrad_instance,
 )
 
 
@@ -39,7 +39,7 @@ def test_plan_forwards_pending_chat_completion_when_runner_ready():
     """
     shard0 = get_pipeline_shard_metadata(MODEL_A_ID, device_rank=0, world_size=2)
     shard1 = get_pipeline_shard_metadata(MODEL_A_ID, device_rank=1, world_size=2)
-    instance = get_mlx_ring_instance(
+    instance = get_tinygrad_instance(
         instance_id=INSTANCE_1_ID,
         model_id=MODEL_A_ID,
         node_to_runner={NODE_A: RUNNER_1_ID, NODE_B: RUNNER_2_ID},
@@ -93,7 +93,7 @@ def test_plan_does_not_forward_chat_completion_if_any_runner_not_ready():
     """
     shard1 = get_pipeline_shard_metadata(MODEL_A_ID, device_rank=0, world_size=2)
     shard2 = get_pipeline_shard_metadata(MODEL_A_ID, device_rank=1, world_size=2)
-    instance = get_mlx_ring_instance(
+    instance = get_tinygrad_instance(
         instance_id=INSTANCE_1_ID,
         model_id=MODEL_A_ID,
         node_to_runner={NODE_A: RUNNER_1_ID, NODE_B: RUNNER_2_ID},
@@ -146,7 +146,7 @@ def test_plan_does_not_forward_tasks_for_other_instances():
     not match the local instance.
     """
     shard = get_pipeline_shard_metadata(model_id=MODEL_A_ID, device_rank=0)
-    local_instance = get_mlx_ring_instance(
+    local_instance = get_tinygrad_instance(
         instance_id=INSTANCE_1_ID,
         model_id=MODEL_A_ID,
         node_to_runner={NODE_A: RUNNER_1_ID},
@@ -198,7 +198,7 @@ def test_plan_ignores_non_pending_or_non_chat_tasks():
     """
     shard0 = get_pipeline_shard_metadata(MODEL_A_ID, device_rank=0, world_size=2)
     shard1 = get_pipeline_shard_metadata(MODEL_A_ID, device_rank=1, world_size=2)
-    instance = get_mlx_ring_instance(
+    instance = get_tinygrad_instance(
         instance_id=INSTANCE_1_ID,
         model_id=MODEL_A_ID,
         node_to_runner={NODE_A: RUNNER_1_ID, NODE_B: RUNNER_2_ID},
@@ -267,7 +267,7 @@ def test_plan_returns_none_when_nothing_to_do():
     """
     shard0 = get_pipeline_shard_metadata(MODEL_A_ID, device_rank=0, world_size=2)
     shard1 = get_pipeline_shard_metadata(MODEL_A_ID, device_rank=1, world_size=2)
-    instance = get_mlx_ring_instance(
+    instance = get_tinygrad_instance(
         instance_id=INSTANCE_1_ID,
         model_id=MODEL_A_ID,
         node_to_runner={NODE_A: RUNNER_1_ID, NODE_B: RUNNER_2_ID},

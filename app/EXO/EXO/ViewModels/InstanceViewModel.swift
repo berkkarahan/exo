@@ -194,10 +194,6 @@ extension InstanceViewModel {
     static func friendlyShardingName(for raw: String?) -> String? {
         guard let raw else { return nil }
         switch raw.lowercased() {
-        case "mlxringinstance", "mlxring":
-            return "MLX Ring"
-        case "mlxibvinstance", "mlxibv":
-            return "MLX RDMA"
         default:
             return raw
         }

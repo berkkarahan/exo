@@ -378,14 +378,6 @@ def main_inner(args: "Args"):
         os.environ["EXO_NO_BATCH"] = "1"
         logger.info("Continuous batching disabled (--no-batch)")
 
-    # Set FAST_SYNCH override env var for runner subprocesses
-    if args.fast_synch is True:
-        os.environ["EXO_FAST_SYNCH"] = "true"
-        logger.info("FAST_SYNCH forced ON")
-    elif args.fast_synch is False:
-        os.environ["EXO_FAST_SYNCH"] = "false"
-        logger.info("FAST_SYNCH forced OFF")
-
     node = anyio.run(Node.create, args)
     try:
         anyio.run(node.run)
@@ -409,7 +401,6 @@ class Args(FrozenModel):
     no_downloads: bool = False
     offline: bool = os.getenv("EXO_OFFLINE", "false").lower() == "true"
     no_batch: bool = False
-    fast_synch: bool | None = None  # None = auto, True = force on, False = force off
     legacy_daemon: bool = False
     bootstrap_peers: list[str] = []
     namespace: str
@@ -507,20 +498,5 @@ class Args(FrozenModel):
             dest="discovery_port",
             help="Fixed UDP port for the discovery service.",
         )
-        fast_synch_group = parser.add_mutually_exclusive_group()
-        fast_synch_group.add_argument(
-            "--fast-synch",
-            action="store_true",
-            dest="fast_synch",
-            default=None,
-            help="Force MLX FAST_SYNCH on (for JACCL backend)",
-        )
-        fast_synch_group.add_argument(
-            "--no-fast-synch",
-            action="store_false",
-            dest="fast_synch",
-            help="Force MLX FAST_SYNCH off",
-        )
-
         args = parser.parse_args()
         return cls(**vars(args))  # pyright: ignore[reportAny] - We are intentionally validating here, we can't do it statically

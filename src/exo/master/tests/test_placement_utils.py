@@ -3,7 +3,6 @@ import pytest
 from exo.master.placement_utils import (
     allocate_layers_proportionally,
     filter_cycles_by_memory,
-    get_mlx_jaccl_coordinators,
     get_shard_assignments,
     get_shard_assignments_for_pipeline_parallel,
     get_smallest_cycles,
@@ -17,11 +16,7 @@ from exo.shared.topology import Topology
 from exo.shared.types.backends import Backend
 from exo.shared.types.common import NodeId
 from exo.shared.types.memory import Memory
-from exo.shared.types.profiling import (
-    NetworkInterfaceInfo,
-    NodeNetworkInfo,
-)
-from exo.shared.types.topology import Connection, SocketConnection
+from exo.shared.types.topology import Connection
 from exo.shared.types.worker.shards import (
     CfgShardMetadata,
     PipelineShardMetadata,
@@ -244,7 +239,7 @@ def test_get_shard_assignments(
         hidden_size=1000,
         supports_tensor=True,
         tasks=[ModelTask.TextGeneration],
-        backends=[Backend.MlxMetal],
+        backends=[Backend.TinygradMetal],
     )
 
     cycles = topology.get_cycles()
@@ -277,115 +272,6 @@ def test_get_shard_assignments(
         - shard_assignments.runner_to_shard[runner_id_c].start_layer
         == expected_layers[2]
     )
-
-
-def test_get_mlx_jaccl_coordinators():
-    # arrange
-    node_a_id = NodeId()
-    node_b_id = NodeId()
-    node_c_id = NodeId()
-
-    # fully connected (directed) between the 3 nodes
-    conn_a_b = Connection(
-        source=node_a_id, sink=node_b_id, edge=create_socket_connection(1)
-    )
-    conn_b_a = Connection(
-        source=node_b_id, sink=node_a_id, edge=create_socket_connection(2)
-    )
-    conn_b_c = Connection(
-        source=node_b_id, sink=node_c_id, edge=create_socket_connection(3)
-    )
-    conn_c_b = Connection(
-        source=node_c_id, sink=node_b_id, edge=create_socket_connection(4)
-    )
-    conn_c_a = Connection(
-        source=node_c_id, sink=node_a_id, edge=create_socket_connection(5)
-    )
-    conn_a_c = Connection(
-        source=node_a_id, sink=node_c_id, edge=create_socket_connection(6)
-    )
-
-    network_a = NodeNetworkInfo(
-        interfaces=[
-            NetworkInterfaceInfo(name="en0", ip_address="169.254.0.5"),
-            NetworkInterfaceInfo(name="en0", ip_address="169.254.0.2"),
-        ]
-    )
-    network_b = NodeNetworkInfo(
-        interfaces=[
-            NetworkInterfaceInfo(name="en0", ip_address="169.254.0.1"),
-            NetworkInterfaceInfo(name="en0", ip_address="169.254.0.4"),
-        ]
-    )
-    network_c = NodeNetworkInfo(
-        interfaces=[
-            NetworkInterfaceInfo(name="en0", ip_address="169.254.0.3"),
-            NetworkInterfaceInfo(name="en0", ip_address="169.254.0.6"),
-        ]
-    )
-    node_network = {
-        node_a_id: network_a,
-        node_b_id: network_b,
-        node_c_id: network_c,
-    }
-
-    topology = Topology()
-    topology.add_node(node_a_id)
-    topology.add_node(node_b_id)
-    topology.add_node(node_c_id)
-
-    topology.add_connection(conn_a_b)
-    topology.add_connection(conn_b_a)
-    topology.add_connection(conn_b_c)
-    topology.add_connection(conn_c_b)
-    topology.add_connection(conn_c_a)
-    topology.add_connection(conn_a_c)
-
-    # act
-    coordinators = get_mlx_jaccl_coordinators(
-        node_a_id,
-        coordinator_port=5000,
-        cycle_digraph=topology,
-        node_network=node_network,
-    )
-
-    # assert
-    assert len(coordinators) == 3
-    assert node_a_id in coordinators
-    assert node_b_id in coordinators
-    assert node_c_id in coordinators
-
-    # All coordinators should have IP:PORT format
-    for node_id, coordinator in coordinators.items():
-        assert ":" in coordinator, (
-            f"Coordinator for {node_id} should have ':' separator"
-        )
-
-    # Verify port is correct
-    for node_id, coordinator in coordinators.items():
-        assert coordinator.endswith(":5000"), (
-            f"Coordinator for {node_id} should use port 5000"
-        )
-
-    # Rank 0 (node_a) treats this as the listen socket so should listen on all IPs
-    assert coordinators[node_a_id].startswith("0.0.0.0:"), (
-        "Rank 0 node should use 0.0.0.0 as coordinator listen address"
-    )
-
-    # Non-rank-0 nodes should use the specific IP from their connection to rank 0
-    # node_b uses the IP from conn_b_a (node_b -> node_a)
-    assert isinstance(conn_b_a.edge, SocketConnection)
-    assert (
-        coordinators[node_b_id] == f"{conn_b_a.edge.sink_multiaddr.ip_address}:5000"
-    ), "node_b should use the IP from conn_b_a"
-
-    # node_c uses the IP from conn_c_a (node_c -> node_a)
-    assert isinstance(conn_c_a.edge, SocketConnection)
-    assert coordinators[node_c_id] == (
-        f"{conn_c_a.edge.sink_multiaddr.ip_address}:5000"
-    ), "node_c should use the IP from conn_c_a"
-
-
 class TestAllocateLayersProportionally:
     def test_empty_node_list_raises(self):
         with pytest.raises(ValueError, match="empty node list"):
@@ -486,7 +372,7 @@ def test_get_shard_assignments_insufficient_memory_raises():
         hidden_size=1000,
         supports_tensor=True,
         tasks=[ModelTask.TextGeneration],
-        backends=[Backend.MlxMetal],
+        backends=[Backend.TinygradMetal],
     )
     cycles = topology.get_cycles()
     selected_cycle = cycles[0]
@@ -536,7 +422,7 @@ class TestCfgParallelPlacement:
             supports_tensor=False,
             uses_cfg=True,
             tasks=[ModelTask.TextToImage],
-            backends=[Backend.MlxMetal],
+            backends=[Backend.TinygradMetal],
         )
 
         assignments = get_shard_assignments_for_pipeline_parallel(
@@ -580,7 +466,7 @@ class TestCfgParallelPlacement:
             supports_tensor=False,
             uses_cfg=True,
             tasks=[ModelTask.TextToImage],
-            backends=[Backend.MlxMetal],
+            backends=[Backend.TinygradMetal],
         )
 
         assignments = get_shard_assignments_for_pipeline_parallel(
@@ -630,7 +516,7 @@ class TestCfgParallelPlacement:
             supports_tensor=False,
             uses_cfg=True,
             tasks=[ModelTask.TextToImage],
-            backends=[Backend.MlxMetal],
+            backends=[Backend.TinygradMetal],
         )
 
         assignments = get_shard_assignments_for_pipeline_parallel(
@@ -666,7 +552,7 @@ class TestCfgParallelPlacement:
             supports_tensor=False,
             uses_cfg=False,  # Non-CFG model
             tasks=[ModelTask.TextToImage],
-            backends=[Backend.MlxMetal],
+            backends=[Backend.TinygradMetal],
         )
 
         assignments = get_shard_assignments_for_pipeline_parallel(

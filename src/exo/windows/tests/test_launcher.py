@@ -331,7 +331,7 @@ def test_configured_environment_matches_the_macos_app() -> None:
     assert environment["HF_ENDPOINT"] == "https://hf-mirror.com"
     assert environment["EXO_OFFLINE"] == "true"
     assert environment["EXO_ENABLE_IMAGE_MODELS"] == "true"
-    assert environment["EXO_FAST_SYNCH"] == "true"
+    assert "EXO_FAST_SYNCH" not in environment
     assert environment["EXO_DEFAULT_MODELS_DIR"] == "D:/models"
     assert environment["EXO_MODELS_DIRS"] == "D:/extra"
     assert environment["EXO_MODELS_READ_ONLY_DIRS"] == "D:/ro"
@@ -351,7 +351,7 @@ def test_blank_macos_fields_clear_parent_environment_values() -> None:
         LauncherSettings(device_name="CPU", device_label="CPU (RAM)"),
     )
     assert environment["EXO_TINYGRAD_DEVICES"] == "CPU"
-    assert environment["EXO_FAST_SYNCH"] == "false"
+    assert "EXO_FAST_SYNCH" not in environment
     for name in (
         "HF_TOKEN",
         "HF_ENDPOINT",
@@ -469,7 +469,6 @@ def _macos_style_settings() -> LauncherSettings:
         hugging_face_endpoint="https://hf-mirror.com",
         offline_mode=True,
         enable_image_models=True,
-        fast_synch_enabled=True,
         default_models_directory="D:/models",
         additional_models_directories="D:/extra",
         read_only_models_directories="D:/ro",

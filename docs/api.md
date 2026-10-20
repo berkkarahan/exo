@@ -189,7 +189,7 @@ Add a custom model from HuggingFace hub.
 
 ```json
 {
-  "model_id": "mlx-community/my-custom-model"
+  "model_id": "myorg/my-custom-model"
 }
 ```
 
@@ -216,7 +216,7 @@ Confirmation JSON with deleted model ID.
 
 **GET** `/models/search`
 
-Search HuggingFace Hub for mlx-community models.
+Search HuggingFace Hub for GGUF models.
 
 **Query parameters:**
 

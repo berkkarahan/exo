@@ -39,7 +39,7 @@ def get_pipeline_shard_metadata(
             hidden_size=1000,
             supports_tensor=True,
             tasks=[ModelTask.TextGeneration],
-            backends=[Backend.MlxMetal],
+            backends=[Backend.TinygradMetal],
         ),
         device_rank=device_rank,
         world_size=world_size,

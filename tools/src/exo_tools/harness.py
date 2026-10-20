@@ -24,11 +24,6 @@ class Sharding(str, Enum):
     TENSOR = "Tensor"  # layers split within (across nodes)
 
 
-class Comm(str, Enum):
-    RING = "MlxRing"  # ring all-reduce over network
-    JACCL = "MlxJaccl"  # RDMA over Thunderbolt
-
-
 _SETTLE_INITIAL_BACKOFF_S = 1.0
 _SETTLE_MAX_BACKOFF_S = 60.0
 _SETTLE_BACKOFF_MULTIPLIER = 2.0
@@ -188,13 +183,6 @@ def resolve_model_short_id(
     raise ValueError(f"Model not found in /models: {model_arg}")
 
 
-def placement_filter(instance_meta: str, wanted: str) -> bool:
-    s = (instance_meta or "").lower()
-    if wanted == "both":
-        return ("ring" in s) or ("jaccl" in s)
-    return wanted in s
-
-
 def sharding_filter(sharding: str, wanted: str) -> bool:
     s = (sharding or "").lower()
     if wanted == "both":
@@ -218,8 +206,6 @@ def fetch_and_filter_placements(
     for p in previews:
         if p.get("error") is not None:
             continue
-        if not placement_filter(str(p.get("instance_meta", "")), args.instance_meta):
-            continue
         if not sharding_filter(str(p.get("sharding", "")), args.sharding):
             continue
 
@@ -228,36 +214,8 @@ def fetch_and_filter_placements(
             continue
 
         n = nodes_used_in_instance(instance)
-        # Skip tensor ring single node as it is pointless when pipeline ring
-        if n == 1 and (
-            (args.sharding == "both" and "tensor" in p.get("sharding", "").lower())
-            or (
-                args.instance_meta == "both"
-                and "jaccl" in p.get("instance_meta", "").lower()
-            )
-        ):
-            continue
-
-        if (
-            args.skip_pipeline_jaccl
-            and (
-                args.instance_meta == "both"
-                and "jaccl" in p.get("instance_meta", "").lower()
-            )
-            and (
-                args.sharding == "both" and "pipeline" in p.get("sharding", "").lower()
-            )
-        ):
-            continue
-
-        if (
-            args.skip_tensor_ring
-            and (
-                args.instance_meta == "both"
-                and "ring" in p.get("instance_meta", "").lower()
-            )
-            and (args.sharding == "both" and "tensor" in p.get("sharding", "").lower())
-        ):
+        # Skip single-node tensor placements when a pipeline placement exists
+        if n == 1 and args.sharding == "both" and "tensor" in p.get("sharding", "").lower():
             continue
 
         if args.min_nodes <= n <= args.max_nodes:
@@ -498,20 +456,7 @@ def add_common_instance_args(ap: argparse.ArgumentParser) -> None:
         help="Only consider placements using >= this many nodes.",
     )
     ap.add_argument(
-        "--instance-meta", choices=["ring", "jaccl", "both"], default="both"
-    )
-    ap.add_argument(
         "--sharding", choices=["pipeline", "tensor", "both"], default="both"
-    )
-    ap.add_argument(
-        "--skip-pipeline-jaccl",
-        action="store_true",
-        help="Skip pipeline+jaccl placements, as it's often pointless.",
-    )
-    ap.add_argument(
-        "--skip-tensor-ring",
-        action="store_true",
-        help="Skip tensor+ring placements, as it's so slow.",
     )
     ap.add_argument(
         "--timeout", type=float, default=7200.0, help="HTTP timeout (seconds)."
@@ -577,7 +522,6 @@ def place_instance(
     model_id: str,
     *,
     sharding: Sharding = Sharding.PIPELINE,
-    comm: Comm = Comm.RING,
     min_nodes: int = 1,
     timeout: float = 600.0,
     placement_retries: int = 10,
@@ -594,7 +538,7 @@ def place_instance(
     body = {
         "model_id": model_id,
         "sharding": sharding.value,
-        "instance_meta": comm.value,
+        "instance_meta": "Tinygrad",
         "min_nodes": min_nodes,
     }
 
@@ -620,7 +564,7 @@ def place_instance(
     if instance_id is None:
         raise TimeoutError(
             f"Placement failed after {placement_retries} attempts "
-            f"({sharding.value}/{comm.value} for {model_id})"
+            f"({sharding.value}/tinygrad for {model_id})"
         )
 
     wait_for_instance_ready(client, instance_id, timeout=timeout)

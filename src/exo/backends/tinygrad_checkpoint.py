@@ -78,13 +78,13 @@ _GGUF_LAYER_SUFFIX: dict[str, str] = {
     "ffn_down.weight": "mlp.down_proj.weight",
 }
 
-_MLX_ATTENTION: dict[str, str] = {
+_TRANSFORMER_ATTENTION: dict[str, str] = {
     "wq": "self_attn.q_proj.weight",
     "wk": "self_attn.k_proj.weight",
     "wv": "self_attn.v_proj.weight",
     "wo": "self_attn.o_proj.weight",
 }
-_MLX_FEED_FORWARD: dict[str, str] = {
+_TRANSFORMER_FEED_FORWARD: dict[str, str] = {
     "w1": "mlp.gate_proj.weight",
     "w3": "mlp.up_proj.weight",
     "w2": "mlp.down_proj.weight",
@@ -136,6 +136,9 @@ _GGML_QUANT_BLOCK: dict[int, tuple[int, int]] = {
     39: (32, 17),
     41: (128, 18),
 }
+# The name table covers the known GGML enum so unsupported types report a
+# readable name; only _GGML_NATIVE_ITEMSIZE and _GGML_QUANT_BLOCK decide what
+# this build can actually load, mirroring the vendored decoder's capability.
 _GGML_TYPE_NAMES: dict[int, str] = {
     0: "F32",
     1: "F16",
@@ -144,13 +147,27 @@ _GGML_TYPE_NAMES: dict[int, str] = {
     6: "Q5_0",
     7: "Q5_1",
     8: "Q8_0",
+    9: "Q8_1",
+    10: "Q2_K",
+    11: "Q3_K",
     12: "Q4_K",
     13: "Q5_K",
     14: "Q6_K",
+    15: "Q8_K",
+    16: "IQ2_XXS",
+    17: "IQ2_XS",
     18: "IQ3_XXS",
+    19: "IQ1_S",
+    20: "IQ4_NL",
     21: "IQ3_S",
     22: "IQ2_S",
     23: "IQ4_XS",
+    24: "I8",
+    25: "I16",
+    26: "I32",
+    27: "I64",
+    28: "F64",
+    29: "IQ1_M",
     30: "BF16",
     39: "MXFP4",
     41: "Q1_0",
@@ -173,6 +190,16 @@ _GGUF_FILE_TYPE_NAMES: dict[int, str] = {
     17: "Q5_K_M",
     18: "Q6_K",
 }
+
+
+def supported_ggml_type_names() -> str:
+    """Comma-separated names of the GGML types this build can size and convert."""
+    loadable = sorted(set(_GGML_NATIVE_ITEMSIZE) | set(_GGML_QUANT_BLOCK))
+    return ", ".join(
+        _GGML_TYPE_NAMES.get(ggml_type, f"ggml-type-{ggml_type}")
+        for ggml_type in loadable
+    )
+
 
 type GgufScalar = int | float | str | bool
 
@@ -213,8 +240,19 @@ class GgufTensorRecord:
 
         Raises:
             TinygradWeightError: The runner entrypoint handles this when a
-                selected tensor uses a GGML type this loader cannot size.
+                selected tensor uses a GGML type this loader cannot size. For
+                types outside the supported set the message names the tensor,
+                the type, and the types this build can load so the fix is
+                actionable.
         """
+        if (
+            self.ggml_type not in _GGML_NATIVE_ITEMSIZE
+            and self.ggml_type not in _GGML_QUANT_BLOCK
+        ):
+            raise TinygradWeightError(
+                f"tensor {self.source_name} uses {self.ggml_type_name()}, "
+                f"which this build cannot load; supported: {supported_ggml_type_names()}"
+            )
         return ggml_payload_byte_count(self.element_count, self.ggml_type)
 
 
@@ -254,7 +292,7 @@ class GgufCheckpoint:
 
 
 def canonical_tensor_name(source_name: str) -> str | None:
-    """Map a Hugging Face, MLX, or GGUF name onto the loader's tensor name.
+    """Map a Hugging Face, transformer, or GGUF name onto the loader's tensor name.
 
     Unrecognized names return ``None`` and are ignored. Hugging Face names
     that already match the loader are returned unchanged.
@@ -268,7 +306,7 @@ def canonical_tensor_name(source_name: str) -> str | None:
         if suffix is None:
             return None
         return f"model.layers.{gguf_match.group(1)}.{suffix}"
-    return _canonical_mlx_or_hugging_face_name(source_name)
+    return _canonical_transformer_or_hugging_face_name(source_name)
 
 
 def ggml_payload_byte_count(element_count: int, ggml_type: int) -> int:
@@ -284,12 +322,15 @@ def ggml_payload_byte_count(element_count: int, ggml_type: int) -> int:
         return element_count * itemsize
     block = _GGML_QUANT_BLOCK.get(ggml_type)
     if block is None:
-        type_name = _GGML_TYPE_NAMES.get(ggml_type, str(ggml_type))
-        raise TinygradWeightError(f"Unsupported GGML type {type_name}")
+        type_name = _GGML_TYPE_NAMES.get(ggml_type, f"ggml-type-{ggml_type}")
+        raise TinygradWeightError(
+            f"Unsupported GGML type {type_name}; supported: "
+            f"{supported_ggml_type_names()}"
+        )
     elements_per_block, bytes_per_block = block
     if element_count % elements_per_block != 0:
         raise TinygradWeightError(
-            f"GGML type {_GGML_TYPE_NAMES.get(ggml_type, str(ggml_type))} "
+            f"GGML type {_GGML_TYPE_NAMES.get(ggml_type, ggml_type)} "
             f"requires a multiple of {elements_per_block} elements"
         )
     return (element_count // elements_per_block) * bytes_per_block
@@ -646,7 +687,7 @@ def ggml_tensor_from_file(
         ) from error
 
 
-def _canonical_mlx_or_hugging_face_name(source_name: str) -> str | None:
+def _canonical_transformer_or_hugging_face_name(source_name: str) -> str | None:
     parts = source_name.split(".")
     if parts and parts[0] == "model":
         parts = parts[1:]
@@ -656,9 +697,9 @@ def _canonical_mlx_or_hugging_face_name(source_name: str) -> str | None:
     rest = parts[2:]
     suffix: str | None = None
     if len(rest) == 3 and rest[0] == "attention" and rest[2] == "weight":
-        suffix = _MLX_ATTENTION.get(rest[1])
+        suffix = _TRANSFORMER_ATTENTION.get(rest[1])
     elif len(rest) == 3 and rest[0] == "feed_forward" and rest[2] == "weight":
-        suffix = _MLX_FEED_FORWARD.get(rest[1])
+        suffix = _TRANSFORMER_FEED_FORWARD.get(rest[1])
     elif rest == ["attention_norm", "weight"]:
         suffix = "input_layernorm.weight"
     elif rest == ["ffn_norm", "weight"]:

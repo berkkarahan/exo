@@ -87,23 +87,21 @@ def _report_stdout_raw_stream_type() -> None:
     print("stderr also works", file=sys.stderr)
 
 
-def _mlx_force_oom(size: int = 40_000) -> None:
+def _tinygrad_force_oom(size: int = 40_000) -> None:
     """
-    Force an Out-Of-Memory (OOM) error in MLX by performing large tensor operations.
+    Force an Out-Of-Memory (OOM) error in tinygrad by performing large tensor operations.
     """
-    import mlx.core as mx
+    from tinygrad import Tensor
 
     print("CHILD: start")
 
-    mx.set_default_device(mx.gpu)
-    a = mx.random.uniform(shape=(size, size), dtype=mx.float32)
-    b = mx.random.uniform(shape=(size, size), dtype=mx.float32)
-    mx.eval(a, b)
-    c = mx.matmul(a, b)
-    d = mx.matmul(a, c)
-    e = mx.matmul(b, c)
-    f = mx.sigmoid(d + e)
-    mx.eval(f)
+    a = Tensor.randn(size, size)
+    b = Tensor.randn(size, size)
+    c = a.matmul(b).realize()
+    d = c.matmul(a).realize()
+    e = c.matmul(b).realize()
+    d.sigmoid().realize()
+    e.sigmoid().realize()
 
     print("CHILD: end")
 
@@ -519,10 +517,10 @@ async def test_process_can_use_mp_channel_with_global_spawn_context() -> None:
 
 
 @pytest.mark.anyio
-@pytest.mark.skip(reason="manual MLX OOM isolation check")
+@pytest.mark.skip(reason="manual tinygrad OOM isolation check")
 async def test_death(capsys: CaptureFixture[str]) -> None:
     with capsys.disabled():
-        process = AsyncProcess(_mlx_force_oom)
+        process = AsyncProcess(_tinygrad_force_oom)
         stdout = b""
         stderr = b""
         async with _started_process(process):

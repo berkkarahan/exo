@@ -9,11 +9,9 @@ Unit Tests
  - Accepts tasks
  - Returns ChunkGenerated events
 
-3. Test mlx engine
- - Autoparallel on n of the same nodes returns tensors with 1/n size
- - mx.barrier forces computation
+3. Test tinygrad engine
+ - Sharded tensor placement on n of the same nodes returns shards with 1/n size
  - Distributed init returns expected configuration
- - initialize_mlx sets wired limit
  - shard_and_load returns expected model
  - Quantization returns quantized layers
 
@@ -37,16 +35,16 @@ Integration tests:
 
 2. Test that node count does not affect inference result (per-configuration)
  - Llama on 1 node, and on 2 nodes returns the same result, given temperature 0 and set seed.
- - Do for all configurations (Ring/Jaccl, Pipeline/Tensor)
+ - Do for all sharding configurations (Pipeline/Tensor)
 
 3. Test supervisor catches exceptions gracefully
  - Timeouts
  - OOM
- - MLX error
+ - Inference engine error
 
 4. distributed init memory requirements are as expected
 
-5. MLX
+5. Inference engine
  - KVCache size is same length as prompt tokens
  - Prefix cache (once implemented)
 

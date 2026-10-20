@@ -78,10 +78,8 @@
         let
           pkgsArgs = {
             inherit system;
-            config.allowUnfreePredicate = pkg: (pkg.pname or "") == "metal-toolchain";
             overlays = [
               inputs.nixglhost.overlays.default
-              (import ./nix/apple-sdk-overlay.nix)
               (final: _: {
                 macmon = final.rustPlatform.buildRustPackage {
                   pname = "macmon";
@@ -99,7 +97,7 @@
           };
         in
         {
-          # Allow unfree for metal-toolchain (needed for Darwin Metal packages)
+          # Allow unfree for packages that need it (e.g. CUDA wheels)
           _module.args = {
             pkgs = import inputs.nixpkgs pkgsArgs;
             unfreePkgs = import inputs.nixpkgs (pkgsArgs // { config.allowUnfree = true; });
@@ -132,9 +130,6 @@
 
           packages = {
             default = self'.packages.exo;
-          } //
-          lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin {
-            metal-toolchain = pkgs.callPackage ./nix/metal-toolchain.nix { };
           };
 
           devShells.default = with pkgs; pkgs.mkShell {

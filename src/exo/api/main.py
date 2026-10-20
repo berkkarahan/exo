@@ -477,7 +477,7 @@ class API:
         self,
         model_id: ModelId,
         sharding: Sharding = Sharding.Pipeline,
-        instance_meta: InstanceMeta = InstanceMeta.MlxRing,
+        instance_meta: InstanceMeta = InstanceMeta.Tinygrad,
         min_nodes: int = 1,
     ) -> Instance:
         model_card = await ModelCard.load(model_id)
@@ -533,18 +533,11 @@ class API:
             ) from exc
         instance_combinations: list[tuple[Sharding, InstanceMeta, int]] = []
         node_count = len(list(self.state.topology.list_nodes()))
-        for sharding in (Sharding.Pipeline, Sharding.Tensor):
-            for instance_meta in (InstanceMeta.MlxRing, InstanceMeta.MlxJaccl):
-                instance_combinations.extend(
-                    [(sharding, instance_meta, i) for i in range(1, node_count + 1)]
-                )
         instance_combinations.extend(
             (sharding, InstanceMeta.Tinygrad, i)
             for sharding in (Sharding.Pipeline, Sharding.Tensor)
             for i in range(1, node_count + 1)
         )
-        # TODO: PDD
-        # instance_combinations.append((Sharding.PrefillDecodeDisaggregation, InstanceMeta.MlxRing, 1))
 
         for sharding, instance_meta, min_nodes in instance_combinations:
             try:
@@ -1901,10 +1894,8 @@ class API:
     ) -> list[HuggingFaceSearchResult]:
         """Search Hugging Face for weights the advertised backends can run.
 
-        MLX clusters search MLX Community, then the rest of the Hub when that
-        author has no hits. GGUF clusters search the ``gguf`` tag and do not
-        fall back to MLX weights. A cluster that advertises both interleaves
-        the two queries.
+        GGUF clusters search the ``gguf`` tag. This fork has no other
+        weight formats to fall back to.
         """
         from huggingface_hub import ModelInfo, list_models
 
@@ -1926,7 +1917,7 @@ class API:
                 return _to_results(
                     list_models(
                         search=query or None,
-                        author=spec.author or "mlx-community",
+                        author=spec.author,
                         sort="downloads",
                         limit=limit,
                     )
@@ -1943,17 +1934,6 @@ class API:
         searches: tuple[CatalogueSearch, ...] = catalogue_searches(
             self._advertised_backends()
         )
-        if len(searches) == 1 and searches[0].author == "mlx-community":
-            mlx_results = _search(searches[0])
-            if mlx_results:
-                return mlx_results
-            return _to_results(
-                list_models(
-                    search=query or None,
-                    sort="downloads",
-                    limit=limit,
-                )
-            )
 
         seen: set[str] = set()
         merged: list[HuggingFaceSearchResult] = []

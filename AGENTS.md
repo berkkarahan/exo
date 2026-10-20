@@ -4,7 +4,7 @@ This file provides guidance to AI coding agents when working with code in this r
 
 ## Project Overview
 
-exo is a distributed AI inference system that connects multiple devices into a cluster. It enables running large language models across multiple machines using MLX as the inference backend and zenoh for peer-to-peer networking.
+exo is a distributed AI inference system that connects multiple devices into a cluster. It enables running large language models across multiple machines using tinygrad as the inference backend and zenoh for peer-to-peer networking.
 
 ## Build & Run Commands
 
@@ -154,7 +154,7 @@ const { chromium } = require('playwright');
   // Inject test data into localStorage if needed (e.g., recent models)
   await page.evaluate(() => {
     localStorage.setItem('exo-recent-models', JSON.stringify([
-      { modelId: 'mlx-community/Qwen3-30B-A3B-4bit', launchedAt: Date.now() },
+      { modelId: 'Qwen/Qwen2.5-0.5B-Instruct-GGUF', launchedAt: Date.now() },
     ]));
   });
   await page.reload({ waitUntil: 'networkidle' });

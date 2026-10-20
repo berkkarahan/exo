@@ -200,7 +200,7 @@ def windows_backends_from_declared_devices(
     Raises:
         TinygradDeviceSelectionError: A name is not ``AMD``, ``CUDA``, or
             ``CPU``. ``NodeBackends.gather`` lets this propagate so startup
-            fails instead of advertising ``MlxCpu``.
+            fails instead of falling back to a CPU identity.
     """
     backends: list[Backend] = []
     for device_name in device_names:
@@ -243,7 +243,7 @@ def windows_join_backends(
     An explicit ``EXO_TINYGRAD_DEVICES`` list wins. Otherwise each AMD or
     NVIDIA adapter is advertised, and ``has_nvidia_gpu`` adds ``WinCUDA`` when
     the adapter name was unreadable. A machine with no accelerator joins as
-    ``WinCPU`` alone. ``MlxCpu`` is never returned.
+    ``WinCPU`` alone.
     """
     declared_backends = windows_backends_from_declared_devices(declared_device_names)
     if declared_backends:
@@ -424,7 +424,9 @@ class TinygradEngine(Engine):
 
     Construction selects the device by assigning ``Device.DEFAULT``. The local
     key-value cache stays on that device. Hidden-state bytes are the only
-    values that cross a rank boundary.
+    values that cross a rank boundary. tinygrad's disk compile cache binds its
+    SQLite connection to the thread that first compiles a kernel, so one
+    engine must be loaded and stepped on a single thread.
     """
 
     device_name: TinygradDeviceName
@@ -1370,22 +1372,14 @@ class TinygradBuilder(Builder):
         Raises:
             TinygradPipelineError: The runner entrypoint handles a neighbour
                 that does not complete the handshake.
-            TinygradWeightError: The runner entrypoint handles a placement
-                that is not a tinygrad pipeline shard.
         """
         from exo.backends.tinygrad_pipeline import (
             PipelineHandshakeIdentity,
             TcpPipelineTransport,
             TinygradPipelineError,
         )
-        from exo.backends.tinygrad_weights import TinygradWeightError
-        from exo.shared.types.worker.instances import TinygradInstance
 
         instance = bound_instance.instance
-        if not isinstance(instance, TinygradInstance):
-            raise TinygradWeightError(
-                "Tinygrad connect received a placement that is not tinygrad"
-            )
         shard = _assigned_shard(bound_instance)
         if shard.world_size == 1:
             return

@@ -52,8 +52,8 @@ def test_device_map_covers_the_placement_registry() -> None:
 
 
 def test_non_tinygrad_backend_is_rejected() -> None:
-    with pytest.raises(TinygradDeviceSelectionError, match="MlxMetal"):
-        tinygrad_device_name_for_backend(Backend.MlxMetal)
+    with pytest.raises(TinygradDeviceSelectionError, match="Vllm"):
+        tinygrad_device_name_for_backend(Backend.Vllm)
 
 
 def test_declared_devices_ignore_the_operating_system() -> None:
@@ -119,6 +119,26 @@ def test_engine_generation_requires_a_loaded_shard(
     assert engine.loaded_shard is None
 
 
+def test_registry_rejects_tinygrad_image_models(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "exo.backends.tinygrad_engine.assign_tinygrad_default_device",
+        _keep_device_name,
+    )
+    bound_instance = _bound_instance(image_model=True)
+    event_state: MpState[Event] = MpState(1)
+    cancel_state: MpState[TaskId] = MpState(1)
+    event_sender = MpSender(event_state)
+    cancel_receiver = MpReceiver(cancel_state)
+    try:
+        with pytest.raises(ValueError, match="no image runtime"):
+            resolve_builder(bound_instance, event_sender, cancel_receiver)
+    finally:
+        event_sender.close()
+        cancel_receiver.close()
+
+
 def test_registry_routes_tinygrad_instances(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "exo.backends.tinygrad_engine.assign_tinygrad_default_device",
@@ -143,7 +163,7 @@ def test_registry_routes_tinygrad_instances(monkeypatch: pytest.MonkeyPatch) -> 
         builder.build()
 
 
-def test_windows_join_backends_never_advertise_mlx_cpu() -> None:
+def test_windows_join_backends_never_advertise_non_windows_backends() -> None:
     assert windows_join_backends(
         declared_device_names=["AMD"],
         adapter_names=["NVIDIA GeForce"],
@@ -198,7 +218,7 @@ async def test_windows_node_joins_as_win_amd(monkeypatch: pytest.MonkeyPatch) ->
     )
     gathered = await NodeBackends.gather()
     assert gathered.backends == [Backend.WinAMD, Backend.OnnxCpu]
-    assert Backend.MlxCpu not in gathered.backends
+    assert Backend.TinygradCpu not in gathered.backends
 
 
 async def test_windows_node_falls_back_to_win_cpu_when_the_opencl_probe_fails(
@@ -301,7 +321,7 @@ async def test_node_backends_include_declared_tinygrad_devices(
     assert Backend.TinygradMetal not in gathered.backends
 
 
-def _bound_instance() -> BoundInstance:
+def _bound_instance(*, image_model: bool = False) -> BoundInstance:
     model_id = ModelId("tinygrad-model")
     node_id = NodeId("node-amd")
     runner_id = RunnerId("runner-amd")
@@ -311,7 +331,7 @@ def _bound_instance() -> BoundInstance:
         n_layers=4,
         hidden_size=32,
         supports_tensor=False,
-        tasks=[ModelTask.TextGeneration],
+        tasks=[ModelTask.TextToImage if image_model else ModelTask.TextGeneration],
         backends=[Backend.TinygradAmd],
     )
     shard = PipelineShardMetadata(

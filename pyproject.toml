@@ -27,6 +27,7 @@ dependencies = [
   "zstandard>=0.23.0",
   "transformers>=5.6.2",
   "python-daemon>=3.1.2",
+  "tinygrad==0.14.0",
   "torch>=2.10.0,<2.14",
 ]
 
@@ -45,48 +46,12 @@ dev = [
   "pytest-asyncio>=1.0.0",
   "pytest-env",
   "ruff>=0.11.13",
-  # Image APIs are checked on every platform, even without the MLX runtime.
+  # Image APIs are checked on every platform.
   "pillow>=12.0.0",
 ]
 
 [project.optional-dependencies]
 build = ["nanobind"]
-mlx-none = ["anyio"]
-mlx = [
-  "mlx==0.32.0",
-  "mlx-lm",
-  "mlx-vlm>=0.3.11",
-  "mflux==0.17.5",
-  "torch==2.10.0; sys_platform == 'darwin'",
-  "torch==2.10.0; sys_platform == 'linux'",
-  "torchaudio==2.10.0; sys_platform == 'darwin'",
-  "torchaudio==2.10.0; sys_platform == 'linux'",
-  "torchvision==0.25.0; sys_platform == 'darwin'",
-  "torchvision==0.25.0; sys_platform == 'linux'",
-]
-mlx-cpu = [
-  "exo[mlx]",
-  "mlx-cpu==0.31.2; sys_platform == 'linux'",
-  "torch==2.10.0; sys_platform == 'linux'",
-  "torchvision==0.25.0; sys_platform == 'linux'",
-  "torchaudio==2.10.0; sys_platform == 'linux'",
-]
-mlx-cuda12 = [
-  "exo[mlx]",
-  "mlx-cuda-12==0.32.0; sys_platform == 'linux'",
-  "nvidia-ml-py>=13.595.45",
-  "torch==2.10.0; sys_platform == 'linux'",
-  "torchvision==0.25.0; sys_platform == 'linux'",
-  "torchaudio==2.10.0; sys_platform == 'linux'",
-]
-mlx-cuda13 = [
-  "exo[mlx]",
-  "mlx-cuda-13==0.32.0; sys_platform == 'linux'",
-  "nvidia-ml-py>=13.595.45",
-  "torch==2.10.0; sys_platform == 'linux'",
-  "torchvision==0.25.0; sys_platform == 'linux'",
-  "torchaudio==2.10.0; sys_platform == 'linux'",
-]
 # onnxruntime-genai ships one distribution per execution provider, each bundling the
 # matching onnxruntime build. Never pair the base package with a separate EP package:
 # both unpack into the same `onnxruntime/` directory and clobber each other's native
@@ -106,40 +71,6 @@ members = ["rust/exo_rs", "bench", "tools"]
 [tool.uv.sources]
 exo-rs = { workspace = true }
 exo-tools = { workspace = true }
-mlx = [
-  # wEXO: on macOS use the official prebuilt MLX wheel. The pinned JACCL fork
-  # (rltakashige/mlx-jaccl-fix-small-recv) no longer compiles with Xcode 27's
-  # Metal compiler (see ml-explore/mlx#4533). The wheel is the same 0.32.0 the
-  # fork is based on; it supports mx.distributed "ring" but not "jaccl".
-  { url = "https://github.com/rltakashige/mlx-jaccl-fix-small-recv/releases/download/mlx_cuda/mlx-0.32.0-cp313-cp313-manylinux_2_35_aarch64.whl", marker = "sys_platform == 'linux' and platform_machine == 'aarch64'" },
-  { url = "https://github.com/rltakashige/mlx-jaccl-fix-small-recv/releases/download/mlx_cuda/mlx-0.32.0-cp313-cp313-manylinux_2_35_x86_64.whl", marker = "sys_platform == 'linux' and platform_machine != 'aarch64'" },
-]
-mlx-cuda-12 = [
-  { url = "https://github.com/rltakashige/mlx-jaccl-fix-small-recv/releases/download/mlx_cuda/mlx_cuda_12-0.32.0-py3-none-manylinux_2_35_aarch64.whl", marker = "sys_platform == 'linux' and platform_machine == 'aarch64'" },
-  { url = "https://github.com/rltakashige/mlx-jaccl-fix-small-recv/releases/download/mlx_cuda/mlx_cuda_12-0.32.0-py3-none-manylinux_2_35_x86_64.whl", marker = "sys_platform == 'linux' and platform_machine != 'aarch64'" },
-]
-mlx-cuda-13 = [
-  { url = "https://github.com/rltakashige/mlx-jaccl-fix-small-recv/releases/download/mlx_cuda/mlx_cuda_13-0.32.0-py3-none-manylinux_2_35_aarch64.whl", marker = "sys_platform == 'linux' and platform_machine == 'aarch64'" },
-  { url = "https://github.com/rltakashige/mlx-jaccl-fix-small-recv/releases/download/mlx_cuda/mlx_cuda_13-0.32.0-py3-none-manylinux_2_35_x86_64.whl", marker = "sys_platform == 'linux' and platform_machine != 'aarch64'" },
-]
-mlx-lm = { git = "https://github.com/rltakashige/mlx-lm", branch = "leo/deepseek-v4" }
-mflux = { git = "https://github.com/evanev7/mflux", branch = "exo2" }
-torch = [
-  { index = "pytorch-cpu", extra = "mlx-cpu", marker = "sys_platform == 'linux'" },
-  # MLX CUDA 12 requires NVRTC >=12.9; PyTorch 2.10's cu128 wheel pins 12.8.
-  { index = "pytorch-cu130", extra = "mlx-cuda12", marker = "sys_platform == 'linux'" },
-  { index = "pytorch-cu130", extra = "mlx-cuda13", marker = "sys_platform == 'linux'" },
-]
-torchvision = [
-  { index = "pytorch-cpu", extra = "mlx-cpu", marker = "sys_platform == 'linux'" },
-  { index = "pytorch-cu130", extra = "mlx-cuda12", marker = "sys_platform == 'linux'" },
-  { index = "pytorch-cu130", extra = "mlx-cuda13", marker = "sys_platform == 'linux'" },
-]
-torchaudio = [
-  { index = "pytorch-cpu", extra = "mlx-cpu", marker = "sys_platform == 'linux'" },
-  { index = "pytorch-cu130", extra = "mlx-cuda12", marker = "sys_platform == 'linux'" },
-  { index = "pytorch-cu130", extra = "mlx-cuda13", marker = "sys_platform == 'linux'" },
-]
 
 [[tool.uv.index]]
 name = "pytorch-cu130"
@@ -196,10 +127,6 @@ exclude = [
 stubPath = ".typings"
 
 [[tool.basedpyright.executionEnvironments]]
-root = "src/exo/worker/engines/image"
-reportMissingModuleSource = false
-
-[[tool.basedpyright.executionEnvironments]]
 root = "src/exo/backends"
 reportMissingModuleSource = false
 
@@ -235,10 +162,6 @@ environments = [
 override-dependencies = ["opencv-python; python_version < '0'"]
 conflicts = [
   [
-    { extra = "mlx-cuda13" },
-    { extra = "mlx-cuda12" },
-    { extra = "mlx-cpu" },
-    { extra = "mlx-none" },
     { extra = "onnx-directml" },
     { extra = "onnx-cuda" },
     { extra = "onnx-cpu" },
@@ -247,17 +170,6 @@ conflicts = [
 
 [tool.uv.extra-build-dependencies]
 miniaudio = ["setuptools", "cffi", "pycparser"]
-mlx = [
-  "setuptools",
-  "typing-extensions",
-  "nanobind",
-  "pybind11",
-  "wheel",
-  "cmake",
-  "ninja",
-]
-mlx-lm = ["setuptools"]
-mflux = ["uv_build"]
 xgrammar = [
   "nanobind",
   "setuptools",
@@ -280,9 +192,6 @@ vllm = [
   "torch",
 ]
 fastsafetensors = ["setuptools", "pybind11"]
-torch = ["typing-extensions"]
-torchvision = ["torch"]
-torchaudio = ["torch"]
 
 ###
 # ruff configuration

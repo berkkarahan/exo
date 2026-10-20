@@ -25,7 +25,7 @@ exo connects all your devices into an AI cluster. Not only does exo enable runni
 - **RDMA over Thunderbolt**: exo ships with [day-0 support for RDMA over Thunderbolt 5](https://x.com/exolabs/status/2001817749744476256?s=20), enabling 99% reduction in latency between devices.
 - **Topology-Aware Auto Parallel**: exo figures out the best way to split your model across all available devices based on a realtime view of your device topology. It takes into account device resources and network latency/bandwidth between each link.
 - **Tensor Parallelism**: exo supports sharding models, for up to 1.8x speedup on 2 devices and 3.2x speedup on 4 devices.
-- **MLX Support**: exo uses [MLX](https://github.com/ml-explore/mlx) as an inference backend and [MLX distributed](https://ml-explore.github.io/mlx/build/html/usage/distributed.html) for distributed communication.
+- **Tinygrad Support**: exo uses [tinygrad](https://github.com/tinygrad/tinygrad) as the inference backend (GGUF models on OpenCL/CUDA/CPU devices) and zenoh for distributed communication.
 - **Multiple API Compatibility**: Compatible with OpenAI Chat Completions API, Claude Messages API, OpenAI Responses API, and Ollama API - use your existing tools and clients.
 - **Custom Model Support**: Load custom models from HuggingFace hub to expand the range of available models.
 
@@ -88,7 +88,6 @@ experimental-features = nix-command flakes
 Then restart the Nix daemon: `sudo launchctl kickstart -k system/org.nixos.nix-daemon`
 
 **Prerequisites:**
-- [Xcode](https://developer.apple.com/xcode/) (provides the Metal ToolChain required for MLX compilation)
 - [brew](https://github.com/Homebrew/brew) (for simple package management on macOS)
 
   ```bash
@@ -127,8 +126,8 @@ git clone https://github.com/exo-explore/exo
 # Build dashboard
 cd exo/dashboard && npm install && npm run build && cd ..
 
-# Install Python dependencies, including the MLX backend
-uv sync --extra mlx
+# Install Python dependencies, including the Tinygrad backend
+uv sync
 
 # Run exo
 uv run exo
@@ -188,9 +187,8 @@ git clone https://github.com/exo-explore/exo
 # Build dashboard
 cd exo/dashboard && npm install && npm run build && cd ..
 
-# Install Python dependencies with the MLX backend for your hardware
-# (NVIDIA: --extra mlx-cuda13 or --extra mlx-cuda12)
-uv sync --extra mlx-cpu
+# Install Python dependencies (tinygrad runs on OpenCL/CUDA/CPU)
+uv sync --extra tinygrad
 
 # Run exo
 uv run exo
@@ -353,7 +351,7 @@ exo provides multiple API-compatible interfaces for maximum compatibility with e
 - **OpenAI Responses API** - Compatible with OpenAI's Responses format
 - **Ollama API** - Compatible with Ollama and tools like OpenWebUI
 
-If you prefer to interact with exo via the API, here is an example creating an instance of a small model (`mlx-community/Llama-3.2-1B-Instruct-4bit`), sending a chat completions request and deleting the instance.
+If you prefer to interact with exo via the API, here is an example creating an instance of a small model (`Qwen/Qwen2.5-0.5B-Instruct-GGUF`), sending a chat completions request and deleting the instance.
 
 ---
 
@@ -371,7 +369,7 @@ Sample response:
 {
   "previews": [
     {
-      "model_id": "mlx-community/Llama-3.2-1B-Instruct-4bit",
+      "model_id": "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
       "sharding": "Pipeline",
       "instance_meta": "MlxRing",
       "instance": {...},
@@ -418,7 +416,7 @@ This command is asynchronous. Before sending inference requests, wait until the
 API sees the new instance for this model:
 
 ```bash
-curl -N "http://localhost:52416/instance/await?model_id=mlx-community/Llama-3.2-1B-Instruct-4bit"
+curl -N "http://localhost:52416/instance/await?model_id=Qwen/Qwen2.5-0.5B-Instruct-GGUF"
 ```
 
 The endpoint returns an SSE stream. A successful wait emits a message with
@@ -436,7 +434,7 @@ Now, make a POST to `/v1/chat/completions` (the same format as OpenAI's API):
 curl -N -X POST http://localhost:52416/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "mlx-community/Llama-3.2-1B-Instruct-4bit",
+    "model": "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
     "messages": [
       {"role": "user", "content": "What is Llama 3.2 1B?"}
     ],
@@ -462,7 +460,7 @@ Use the Claude Messages API format with the `/v1/messages` endpoint:
 curl -N -X POST http://localhost:52416/v1/messages \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "mlx-community/Llama-3.2-1B-Instruct-4bit",
+    "model": "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
     "messages": [
       {"role": "user", "content": "Hello"}
     ],
@@ -479,7 +477,7 @@ Use the OpenAI Responses API format with the `/v1/responses` endpoint:
 curl -N -X POST http://localhost:52416/v1/responses \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "mlx-community/Llama-3.2-1B-Instruct-4bit",
+    "model": "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
     "messages": [
       {"role": "user", "content": "Hello"}
     ],
@@ -496,7 +494,7 @@ exo supports Ollama API endpoints for compatibility with tools like OpenWebUI:
 curl -X POST http://localhost:52416/ollama/api/chat \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "mlx-community/Llama-3.2-1B-Instruct-4bit",
+    "model": "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
     "messages": [
       {"role": "user", "content": "Hello"}
     ],
@@ -515,7 +513,7 @@ You can add custom models from the HuggingFace hub:
 curl -X POST http://localhost:52416/models/add \
   -H 'Content-Type: application/json' \
   -d '{
-    "model_id": "mlx-community/my-custom-model"
+    "model_id": "myorg/my-custom-model"
   }'
 ```
 

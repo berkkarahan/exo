@@ -3,9 +3,9 @@
 Test authors declare requirements via markers:
 
     @pytest.mark.cluster(count=2, thunderbolt='a2a')
-    @pytest.mark.instance('mlx-community/Llama-3.2-1B-Instruct-4bit',
-                          sharding='tensor', comm='jaccl')
-    def test_jaccl_inference(session):
+    @pytest.mark.instance('Qwen/Qwen2.5-0.5B-Instruct-GGUF',
+                          sharding='tensor')
+    def test_tensor_inference(session):
         resp = session.chat('What is 2+2?')
         assert '4' in resp
 
@@ -28,7 +28,7 @@ from exo_tools.cluster import (
     Thunderbolt,
     make_client_from_url,
 )
-from exo_tools.harness import Comm, Sharding
+from exo_tools.harness import Sharding
 
 from exo.api.types.api import (
     ChatCompletionChoice,
@@ -36,7 +36,7 @@ from exo.api.types.api import (
     ChatCompletionResponse,
 )
 
-DEFAULT_MODEL = "mlx-community/Llama-3.2-1B-Instruct-4bit"
+DEFAULT_MODEL = "Qwen/Qwen2.5-0.5B-Instruct-GGUF"
 
 
 def _extract_content(resp: ChatCompletionResponse) -> str:
@@ -64,7 +64,6 @@ class ClusterSpec:
 class InstanceSpec:
     model_id: str
     sharding: Sharding = Sharding.PIPELINE
-    comm: Comm = Comm.RING
     min_nodes: int = 1
 
 
@@ -89,7 +88,6 @@ def parse_instance_marker(marker) -> InstanceSpec | None:
     return InstanceSpec(
         model_id=marker.args[0],
         sharding=marker.kwargs.get("sharding", Sharding.PIPELINE),
-        comm=marker.kwargs.get("comm", Comm.RING),
         min_nodes=marker.kwargs.get("min_nodes", 1),
     )
 

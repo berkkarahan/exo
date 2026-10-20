@@ -19,8 +19,8 @@ from exo.worker.tests.constants import (
 )
 from exo.worker.tests.unittests.conftest import (
     FakeRunnerSupervisor,
-    get_mlx_ring_instance,
     get_pipeline_shard_metadata,
+    get_tinygrad_instance,
 )
 
 
@@ -31,7 +31,7 @@ def test_plan_requests_download_when_waiting_and_shard_not_downloaded():
     """
 
     shard = get_pipeline_shard_metadata(model_id=MODEL_A_ID, device_rank=0)
-    instance = get_mlx_ring_instance(
+    instance = get_tinygrad_instance(
         instance_id=INSTANCE_1_ID,
         model_id=MODEL_A_ID,
         node_to_runner={NODE_A: RUNNER_1_ID},
@@ -72,7 +72,7 @@ def test_plan_loads_model_when_all_shards_downloaded_and_waiting():
     """
     shard1 = get_pipeline_shard_metadata(MODEL_A_ID, device_rank=0, world_size=2)
     shard2 = get_pipeline_shard_metadata(MODEL_A_ID, device_rank=1, world_size=2)
-    instance = get_mlx_ring_instance(
+    instance = get_tinygrad_instance(
         instance_id=INSTANCE_1_ID,
         model_id=MODEL_A_ID,
         node_to_runner={NODE_A: RUNNER_1_ID, NODE_B: RUNNER_2_ID},
@@ -125,7 +125,7 @@ def test_plan_does_not_request_download_when_shard_already_downloaded():
     should not re-emit DownloadModel while global state is still catching up.
     """
     shard = get_pipeline_shard_metadata(MODEL_A_ID, device_rank=0)
-    instance = get_mlx_ring_instance(
+    instance = get_tinygrad_instance(
         instance_id=INSTANCE_1_ID,
         model_id=MODEL_A_ID,
         node_to_runner={NODE_A: RUNNER_1_ID},
@@ -171,7 +171,7 @@ def test_plan_does_not_load_model_until_all_shards_downloaded_globally():
     """
     shard1 = get_pipeline_shard_metadata(MODEL_A_ID, device_rank=0, world_size=2)
     shard2 = get_pipeline_shard_metadata(MODEL_A_ID, device_rank=1, world_size=2)
-    instance = get_mlx_ring_instance(
+    instance = get_tinygrad_instance(
         instance_id=INSTANCE_1_ID,
         model_id=MODEL_A_ID,
         node_to_runner={NODE_A: RUNNER_1_ID, NODE_B: RUNNER_2_ID},

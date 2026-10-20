@@ -959,9 +959,7 @@ class AppStore {
     }
 
     let instanceType: string | null = null;
-    if (instanceTag === "MlxRingInstance") instanceType = "MLX Ring";
-    else if (instanceTag === "MlxJacclInstance") instanceType = "MLX RDMA";
-    else if (instanceTag === "TinygradInstance") instanceType = "Tinygrad";
+    if (instanceTag === "TinygradInstance") instanceType = "Tinygrad";
 
     let sharding: string | null = null;
     const inst = instance as {

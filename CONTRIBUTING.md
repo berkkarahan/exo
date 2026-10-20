@@ -29,7 +29,7 @@ To run EXO from source:
 git clone https://github.com/exo-explore/exo.git
 cd exo/dashboard
 npm install && npm run build && cd ..
-uv sync --extra mlx
+uv sync --extra tinygrad
 uv run exo
 ```
 
@@ -61,7 +61,7 @@ EXO uses TOML-based model cards to define model metadata and capabilities. Model
 To add a new model, create a TOML file with the following structure:
 
 ```toml
-model_id = "mlx-community/Llama-3.2-1B-Instruct-4bit"
+model_id = "Qwen/Qwen2.5-0.5B-Instruct-GGUF"
 n_layers = 16
 hidden_size = 2048
 supports_tensor = true

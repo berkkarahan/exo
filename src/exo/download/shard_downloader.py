@@ -94,7 +94,7 @@ NOOP_DOWNLOAD_PROGRESS = RepoDownloadProgress(
             hidden_size=1,
             supports_tensor=False,
             tasks=[ModelTask.TextGeneration],
-            backends=[Backend.MlxMetal],
+            backends=[Backend.TinygradMetal],
         ),
         device_rank=0,
         world_size=1,

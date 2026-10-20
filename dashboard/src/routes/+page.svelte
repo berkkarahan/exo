@@ -565,7 +565,7 @@
 
   // Recommended models for onboarding: 2 large, 2 medium, 2 small
   // Always includes Llama-3.2-3B-4bit as a fast-loading small option
-  const PINNED_ONBOARDING_MODEL = "mlx-community/Llama-3.2-3B-Instruct-4bit";
+  const PINNED_ONBOARDING_MODEL = "Qwen/Qwen2.5-0.5B-Instruct-GGUF";
   const onboardingModels = $derived.by(() => {
     if (models.length === 0) return [];
     const sorted = [...models]
@@ -909,8 +909,7 @@
     const names = Object.values(nodeBackends()).flat();
     if (names.length === 0) return false;
     return (
-      names.some((name) => TINYGRAD_BACKENDS.has(name)) &&
-      !names.includes("MLX")
+      names.some((name) => TINYGRAD_BACKENDS.has(name))
     );
   }
 
@@ -2096,7 +2095,7 @@
     return inst.shardAssignments?.modelId || "Unknown Model";
   }
 
-  // Get instance details: type (MLX Ring/IBV), sharding (Pipeline/Tensor), and node names
+  // Get instance details: type (Tinygrad), sharding (Pipeline/Tensor), and node names
   function getInstanceInfo(instanceWrapped: unknown): {
     instanceType: string;
     sharding: string;
@@ -2117,9 +2116,7 @@
 
     // Instance type from tag
     let instanceType = "Unknown";
-    if (instanceTag === "MlxRingInstance") instanceType = "MLX Ring";
-    else if (instanceTag === "MlxJacclInstance") instanceType = "MLX RDMA";
-    else if (instanceTag === "TinygradInstance") instanceType = "Tinygrad";
+    if (instanceTag === "TinygradInstance") instanceType = "Tinygrad";
 
     const inst = instance as {
       shardAssignments?: {

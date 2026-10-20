@@ -48,13 +48,13 @@ def _qwen_card() -> ModelCard:
 
 def _weight_only_card() -> ModelCard:
     return ModelCard(
-        model_id=ModelId("mlx-community/example"),
+        model_id=ModelId("exo-test/weight-only"),
         storage_size=Memory.from_bytes(4096),
         n_layers=4,
         hidden_size=16,
         supports_tensor=False,
         tasks=[ModelTask.TextGeneration],
-        backends=[Backend.MlxMetal],
+        backends=[Backend.TinygradMetal],
     )
 
 
@@ -207,26 +207,26 @@ def test_reservation_lowers_the_ceiling_and_keeps_the_free_sample() -> None:
     assert accelerator.driver_version == "3679.0"
 
 
-def test_mlx_placement_does_not_subtract_a_resident_instance() -> None:
+def test_tinygrad_placement_rejects_when_a_resident_instance_uses_up_the_node() -> None:
     card = _weight_only_card()
     topology = Topology()
     node_id = NodeId("mac")
     topology.add_node(node_id)
     node_memory = {node_id: create_node_memory(card.storage_size.in_bytes)}
     node_network = {node_id: create_node_network()}
-    node_backends = {node_id: [Backend.MlxMetal]}
+    node_backends = {node_id: [Backend.TinygradMetal]}
     command = PlaceInstance(
-        command_id=CommandId("place-mlx"),
+        command_id=CommandId("place-tinygrad"),
         model_card=card,
         sharding=Sharding.Pipeline,
-        instance_meta=InstanceMeta.MlxRing,
+        instance_meta=InstanceMeta.Tinygrad,
         min_nodes=1,
     )
 
     placed = place_instance(
         command, topology, {}, node_memory, node_network, node_backends
     )
-    placed_again = place_instance(
-        command, topology, placed, node_memory, node_network, node_backends
-    )
-    assert len(placed_again) == 2
+    with pytest.raises(ValueError, match="No cycles found with sufficient memory"):
+        place_instance(
+            command, topology, placed, node_memory, node_network, node_backends
+        )

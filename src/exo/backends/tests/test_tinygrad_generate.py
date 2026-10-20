@@ -603,6 +603,12 @@ def _loaded_engine(
     return engine
 
 
+# Public aliases so the API serving test can reuse these fixtures without
+# private cross-module imports.
+loaded_engine = _loaded_engine
+text_task = _text_task
+
+
 def write_tinygrad_generation_gguf(
     path: Path,
     *,

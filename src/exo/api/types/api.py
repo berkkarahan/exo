@@ -269,7 +269,7 @@ class HuggingFaceSearchResult(BaseModel):
 class PlaceInstanceParams(BaseModel):
     model_id: ModelId
     sharding: Sharding = Sharding.Pipeline
-    instance_meta: InstanceMeta = InstanceMeta.MlxRing
+    instance_meta: InstanceMeta = InstanceMeta.Tinygrad
     min_nodes: int = 1
 
 

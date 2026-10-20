@@ -39,7 +39,7 @@ def _make_shard(model_id: ModelId = MODEL_ID) -> ShardMetadata:
             hidden_size=1024,
             supports_tensor=False,
             tasks=[ModelTask.TextGeneration],
-            backends=[Backend.MlxMetal],
+            backends=[Backend.TinygradMetal],
         ),
         device_rank=0,
         world_size=1,

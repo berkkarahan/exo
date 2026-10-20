@@ -9,7 +9,7 @@ from exo.shared.types.worker.instances import (
     BoundInstance,
     Instance,
     InstanceId,
-    MlxRingInstance,
+    TinygradInstance,
 )
 from exo.shared.types.worker.runners import RunnerId, RunnerStatus, ShardAssignments
 from exo.shared.types.worker.shards import PipelineShardMetadata, ShardMetadata
@@ -42,7 +42,7 @@ def get_pipeline_shard_metadata(
             hidden_size=2048,
             supports_tensor=False,
             tasks=[ModelTask.TextGeneration],
-            backends=[Backend.MlxMetal],
+            backends=[Backend.TinygradMetal],
         ),
         device_rank=device_rank,
         world_size=world_size,
@@ -64,30 +64,31 @@ def get_shard_assignments(
     )
 
 
-def get_mlx_ring_instance(
+def get_tinygrad_instance(
     instance_id: InstanceId,
     model_id: ModelId,
     node_to_runner: dict[NodeId, RunnerId],
     runner_to_shard: dict[RunnerId, ShardMetadata],
 ) -> Instance:
-    return MlxRingInstance(
+    return TinygradInstance(
         instance_id=instance_id,
         shard_assignments=get_shard_assignments(
             model_id, node_to_runner, runner_to_shard
         ),
-        hosts_by_node={},
-        ephemeral_port=50000,
+        device_backend_by_node={
+            node_id: Backend.TinygradCpu for node_id in node_to_runner
+        },
     )
 
 
-def get_bound_mlx_ring_instance(
+def get_bound_tinygrad_instance(
     instance_id: InstanceId, model_id: ModelId, runner_id: RunnerId, node_id: NodeId
 ) -> BoundInstance:
     shard = get_pipeline_shard_metadata(model_id=model_id, device_rank=0, world_size=2)
     other_shard = get_pipeline_shard_metadata(
         model_id=model_id, device_rank=1, world_size=2
     )
-    instance = get_mlx_ring_instance(
+    instance = get_tinygrad_instance(
         instance_id=instance_id,
         model_id=model_id,
         node_to_runner={

@@ -15,8 +15,6 @@ struct SettingsView: View {
     @State private var pendingHFEndpoint: String = ""
     @State private var pendingEnableImageModels = false
     @State private var pendingOfflineMode = false
-    @State private var pendingInferenceRuntime = "mlx"
-    @State private var pendingFastSynchEnabled = false
     @State private var pendingDefaultModelsDir: String = ""
     @State private var pendingAdditionalModelsDirs: String = ""
     @State private var pendingReadOnlyModelsDirs: String = ""
@@ -54,8 +52,6 @@ struct SettingsView: View {
             pendingHFEndpoint = controller.hfEndpoint
             pendingEnableImageModels = controller.enableImageModels
             pendingOfflineMode = controller.offlineMode
-            pendingInferenceRuntime = controller.inferenceRuntime
-            pendingFastSynchEnabled = controller.fastSynchEnabled
             pendingDefaultModelsDir = controller.defaultModelsDir
             pendingAdditionalModelsDirs = controller.additionalModelsDirs
             pendingReadOnlyModelsDirs = controller.readOnlyModelsDirs
@@ -109,18 +105,6 @@ struct SettingsView: View {
             }
 
             Section {
-                Picker("Inference Backend", selection: $pendingInferenceRuntime) {
-                    Text("mlx").tag("mlx")
-                    Text("tinygrad").tag("tinygrad")
-                }
-                Text(
-                    "Choose tinygrad to join a Windows cluster. A Windows node can join this Mac only when tinygrad is selected."
-                )
-                .font(.caption)
-                .foregroundColor(.secondary)
-            }
-
-            Section {
                 HStack {
                     Spacer()
                     Button("Save & Restart") {
@@ -163,23 +147,6 @@ struct SettingsView: View {
 
     private var advancedTab: some View {
         Form {
-            Section("Performance") {
-                Toggle("Fast Synch Enabled", isOn: $pendingFastSynchEnabled)
-                Text(
-                    "Experimental: enables fast CPU to GPU synchronization. Can sometimes cause a \"GPU lock\" where inference hangs for ~10 seconds before starting. Necessary for low latency with RDMA and Tensor Parallelism."
-                )
-                .font(.caption)
-                .foregroundColor(.secondary)
-
-                HStack {
-                    Spacer()
-                    Button("Save & Restart") {
-                        applyAdvancedSettings()
-                    }
-                    .disabled(!hasAdvancedChanges)
-                }
-            }
-
             Section("Onboarding") {
                 HStack {
                     VStack(alignment: .leading) {
@@ -617,15 +584,10 @@ struct SettingsView: View {
         pendingNamespace != controller.customNamespace || pendingHFToken != controller.hfToken
             || pendingHFEndpoint != controller.hfEndpoint
             || pendingOfflineMode != controller.offlineMode
-            || pendingInferenceRuntime != controller.inferenceRuntime
     }
 
     private var hasModelChanges: Bool {
         pendingEnableImageModels != controller.enableImageModels
-    }
-
-    private var hasAdvancedChanges: Bool {
-        pendingFastSynchEnabled != controller.fastSynchEnabled
     }
 
     private var hasEnvironmentChanges: Bool {
@@ -640,17 +602,11 @@ struct SettingsView: View {
         controller.hfToken = pendingHFToken
         controller.hfEndpoint = pendingHFEndpoint
         controller.offlineMode = pendingOfflineMode
-        controller.inferenceRuntime = pendingInferenceRuntime
         restartIfRunning()
     }
 
     private func applyModelSettings() {
         controller.enableImageModels = pendingEnableImageModels
-        restartIfRunning()
-    }
-
-    private func applyAdvancedSettings() {
-        controller.fastSynchEnabled = pendingFastSynchEnabled
         restartIfRunning()
     }
 

@@ -19,7 +19,7 @@ def _model_card(model_id: ModelId) -> ModelCard:
         hidden_size=1,
         supports_tensor=True,
         tasks=[ModelTask.TextGeneration],
-        backends=[Backend.MlxMetal],
+        backends=[Backend.TinygradMetal],
     )
 
 

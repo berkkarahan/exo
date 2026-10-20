@@ -43,7 +43,7 @@ const { chromium } = require('playwright');
   // Seed test data in localStorage if needed (e.g. recent models)
   await page.evaluate(() => {
     localStorage.setItem('exo-recent-models', JSON.stringify([
-      { modelId: 'mlx-community/Qwen3-30B-A3B-4bit', launchedAt: Date.now() },
+      { modelId: 'Qwen/Qwen2.5-0.5B-Instruct-GGUF', launchedAt: Date.now() },
     ]));
   });
   await page.reload({ waitUntil: 'networkidle' });

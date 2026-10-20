@@ -222,7 +222,6 @@ class LauncherSettings(FrozenModel):
     hugging_face_endpoint: str = ""
     offline_mode: bool = False
     enable_image_models: bool = False
-    fast_synch_enabled: bool = False
     default_models_directory: str = ""
     additional_models_directories: str = ""
     read_only_models_directories: str = ""
@@ -343,7 +342,6 @@ def configured_environment(
         environment["EXO_ENABLE_IMAGE_MODELS"] = "true"
     else:
         environment.pop("EXO_ENABLE_IMAGE_MODELS", None)
-    environment["EXO_FAST_SYNCH"] = "true" if settings.fast_synch_enabled else "false"
     _set_or_clear(
         environment,
         "EXO_DEFAULT_MODELS_DIR",

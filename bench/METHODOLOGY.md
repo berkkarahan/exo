@@ -149,8 +149,7 @@ Results are written as JSON with three top-level keys:
 
 ```bash
 cd bench && uv run python exo_bench.py \
-  --model "mlx-community/Qwen3.5-27B-4bit" \
-  --instance-meta jaccl \
+  --model "Qwen/Qwen2.5-72B-Instruct-GGUF" \
   --sharding tensor \
   --min-nodes 2 --max-nodes 2 \
   --pp 512 4096 --tg 128 \

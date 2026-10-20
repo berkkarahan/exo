@@ -109,7 +109,6 @@ class SettingsPanel:
         self._endpoint = tk.StringVar(value=settings.hugging_face_endpoint)
         self._offline = tk.BooleanVar(value=settings.offline_mode)
         self._image_models = tk.BooleanVar(value=settings.enable_image_models)
-        self._fast_synch = tk.BooleanVar(value=settings.fast_synch_enabled)
         self._default_models = tk.StringVar(value=settings.default_models_directory)
         self._additional_models = tk.StringVar(
             value=settings.additional_models_directories
@@ -186,9 +185,7 @@ class SettingsPanel:
             )
         if tab == "Advanced":
             return (
-                current.model_copy(
-                    update={"fast_synch_enabled": bool(self._fast_synch.get())}
-                ),
+                current,
                 _memory_text_for(current),
             )
         if tab == "Environment":
@@ -275,21 +272,11 @@ class SettingsPanel:
         _save_button(page, 2, lambda: self._on_save("Model"))
 
     def _build_advanced(self, page: ttk.Frame) -> None:
-        ttk.Checkbutton(
-            page,
-            text="Fast Synch Enabled",
-            variable=self._fast_synch,
-        ).grid(row=0, column=0, sticky="w")
-        _caption(
-            page,
-            1,
-            "Experimental CPU to GPU synchronization. The Mac app uses this for low-latency RDMA and tensor parallelism.",
-        )
         ttk.Button(
             page,
             text="Reset Onboarding",
             command=lambda: webbrowser.open(ONBOARDING_RESET_URL),
-        ).grid(row=2, column=0, sticky="w", pady=(12, 0))
+        ).grid(row=0, column=0, sticky="w")
         _caption(page, 3, "Opens the dashboard and resets the onboarding wizard.")
         _save_button(page, 4, lambda: self._on_save("Advanced"))
 

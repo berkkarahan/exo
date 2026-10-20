@@ -4,8 +4,9 @@ from exo.shared.types.worker.downloads import ModelSafetensorsIndex
 
 
 def test_safetensors_index_missing_total_size():
-    """Index files from image models (e.g. FLUX/mflux) have metadata without
-    a total_size field — they use quantization_level and mflux_version instead.
+    """Index files from some image models (e.g. FLUX) have metadata without
+    a total_size field — they use quantization_level and a runtime-version
+    field instead.
 
     This must parse successfully — a previous bug caused Pydantic validation to
     fail silently (total_size was a required PositiveInt), which made

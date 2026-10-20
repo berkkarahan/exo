@@ -1,7 +1,7 @@
 // Mirrors src/exo/shared/models/model_cards.py:derive_base_model
 const QUANT_SUFFIXES = new RegExp(
-  "[-_ ](?:MLX|MXFP[0-9]+|NVFP[0-9]+|GPTQ|AWQ|GGUF|fp16|bf16|fp8|int[0-9]+|[0-9]+(?:\\.[0-9]+)?bit|Q[0-9]+(?:_[A-Z0-9]+)?|gs[0-9]+)" +
-    "(?:[-_ ](?:MLX|Q[0-9]+|Int[0-9]+|[A-Z0-9]+|gs[0-9]+))*$",
+  "[-_ ](?:MXFP[0-9]+|NVFP[0-9]+|GPTQ|AWQ|GGUF|fp16|bf16|fp8|int[0-9]+|[0-9]+(?:\\.[0-9]+)?bit|Q[0-9]+(?:_[A-Z0-9]+)?|gs[0-9]+)" +
+    "(?:[-_ ](?:Q[0-9]+|Int[0-9]+|[A-Z0-9]+|gs[0-9]+))*$",
   "i",
 );
 
