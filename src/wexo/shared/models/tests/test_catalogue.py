@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from anyio import Path as AsyncPath
+
 from wexo.shared.models.catalogue import (
     advertised_catalogue_formats,
     catalogue_searches,
@@ -60,10 +64,19 @@ async def test_builtin_catalogue_only_lists_gguf_cards() -> None:
     cards = await card_cache.list_all()
     for advertised in ([Backend.WinAMD], [Backend.TinygradMetal]):
         listed = [
-            card
-            for card in cards
-            if model_card_matches_catalogue(card, advertised)
+            card for card in cards if model_card_matches_catalogue(card, advertised)
         ]
         assert listed
         assert all(model_card_catalogue_format(card) == "gguf" for card in listed)
         assert any(card.gguf_filename is not None for card in listed)
+
+
+async def test_shipped_cards_validate_without_advertising_retired_backends() -> None:
+    directory = Path(__file__).resolve().parents[5] / "resources/inference_model_cards"
+    paths = sorted(directory.glob("*.toml"))
+    assert paths
+    for path in paths:
+        card = await ModelCard.load_from_path(AsyncPath(path))
+        if card.model_id in ("moonshotai/Kimi-K2.6", "moonshotai/Kimi-K2.7-Code"):
+            assert card.backends == []
+            assert not model_card_matches_catalogue(card, [Backend.TinygradMetal])

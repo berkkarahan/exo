@@ -151,9 +151,8 @@ class Master:
     async def run(self):
         logger.info("Starting Master")
 
-        await self._replay_durable_events()
-
         try:
+            await self._replay_durable_events()
             async with self._tg as tg:
                 tg.start_soon(self._event_processor)
                 tg.start_soon(self._command_processor)
@@ -183,17 +182,14 @@ class Master:
         """
         seen: set[EventId] = set()
         replayed = 0
-        for event in self._event_log.iter_persisted():
-            if not isinstance(
-                event,
-                (
-                    CustomModelCardAdded,
-                    CustomModelCardDeleted,
-                    InstanceLinkCreated,
-                    InstanceLinkDeleted,
-                ),
-            ):
-                continue
+        for event in self._event_log.iter_persisted(
+            event_types=(
+                CustomModelCardAdded,
+                CustomModelCardDeleted,
+                InstanceLinkCreated,
+                InstanceLinkDeleted,
+            )
+        ):
             if event.event_id in seen:
                 continue
             seen.add(event.event_id)

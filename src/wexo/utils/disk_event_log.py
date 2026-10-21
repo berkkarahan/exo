@@ -10,7 +10,7 @@ from typing import Protocol
 import msgspec
 import zstandard
 from loguru import logger
-from pydantic import TypeAdapter
+from pydantic import TypeAdapter, ValidationError
 
 from wexo.shared.types.events import Event
 
@@ -70,12 +70,59 @@ def _read_record(f: _BinaryReader) -> Event | None:
     return _deserialize_event(payload)
 
 
-def _read_zstd_archive(path: Path) -> Iterator[Event]:
+class PersistedEventError(ValueError):
+    """Persisted history could not be recovered without losing configuration."""
+
+
+def _read_persisted_stream(
+    stream: _BinaryReader, path: Path, event_types: tuple[type[Event], ...] | None
+) -> Iterator[Event]:
+    allowed_tags = (
+        {event_type.__name__ for event_type in event_types}
+        if event_types is not None
+        else None
+    )
+    record = 0
+    offset = 0
+    while True:
+        location = f"{path}, record {record}, byte {offset}"
+        try:
+            header = stream.read(_HEADER_SIZE)
+            if not header:
+                return
+            if len(header) != _HEADER_SIZE:
+                raise PersistedEventError(f"Truncated event header at {location}")
+            length = _unpack_header(header)
+            payload = stream.read(length)
+            if len(payload) != length:
+                raise PersistedEventError(f"Truncated event payload at {location}")
+            if allowed_tags is not None:
+                envelope = msgspec.msgpack.decode(payload, type=dict[str, object])
+                if len(envelope) != 1:
+                    raise PersistedEventError(f"Invalid event envelope at {location}")
+                # Transient history may use retired schemas/backends. It must
+                # never be validated against today's models just to skip it.
+                if next(iter(envelope)) not in allowed_tags:
+                    record += 1
+                    offset += _HEADER_SIZE + length
+                    continue
+            event = _deserialize_event(payload)
+        except (msgspec.DecodeError, ValidationError, zstandard.ZstdError) as error:
+            raise PersistedEventError(
+                f"Cannot replay event at {location}; original archive retained"
+            ) from error
+        yield event
+        record += 1
+        offset += _HEADER_SIZE + length
+
+
+def _read_zstd_archive(
+    path: Path, event_types: tuple[type[Event], ...] | None = None
+) -> Iterator[Event]:
     """Yield every event stored in one compressed archive, oldest first."""
     decompressor = zstandard.ZstdDecompressor()
     with path.open("rb") as raw, decompressor.stream_reader(raw) as stream:
-        while (event := _read_record(stream)) is not None:
-            yield event
+        yield from _read_persisted_stream(stream, path, event_types)
 
 
 class DiskEventLog:
@@ -166,13 +213,20 @@ class DiskEventLog:
                     break
                 yield event
 
-    def iter_persisted(self) -> Iterator[Event]:
+    def iter_persisted(
+        self, *, event_types: tuple[type[Event], ...] | None = None
+    ) -> Iterator[Event]:
         """Yield every persisted event in chronological order.
 
         Reads rotated ``events.*.bin.zst`` archives oldest-first, then the
         active ``events.bin``. The master uses this on startup to replay
         durable events (custom model cards, instance links) that are not
         otherwise persisted.
+
+        With ``event_types``, filter tagged records before schema validation.
+        Only startup recovery should use this: ordinary reads stay strict.
+        Invalid selected events or damaged records raise with their location;
+        they are never silently discarded.
 
         The active file's bytes are snapshotted up front: replay appends to
         the active log as it iterates, and reading the file lazily would see
@@ -181,12 +235,11 @@ class DiskEventLog:
         self._file.flush()
         active_bytes = self._active_path.read_bytes() if self._count > 0 else b""
         for archive in sorted(self._directory.glob("events.*.bin.zst")):
-            yield from _read_zstd_archive(archive)
+            yield from _read_zstd_archive(archive, event_types)
         if not active_bytes:
             return
         with BytesIO(active_bytes) as buffer:
-            while (event := _read_record(buffer)) is not None:
-                yield event
+            yield from _read_persisted_stream(buffer, self._active_path, event_types)
 
     def __len__(self) -> int:
         return self._count

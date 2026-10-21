@@ -1,11 +1,15 @@
 from pathlib import Path
 
+import msgspec
 import pytest
+import zstandard
+from pydantic import ValidationError
 
 from wexo.shared.types.events import TestEvent
 from wexo.utils.disk_event_log import (
     _MAX_ARCHIVES,  # pyright: ignore[reportPrivateUsage]
     DiskEventLog,
+    PersistedEventError,
 )
 
 
@@ -199,3 +203,42 @@ def test_iter_persisted_snapshots_active_file(log_dir: Path):
 
     assert seen == 1
     log.close()
+
+
+@pytest.mark.parametrize("filtered", [False, True])
+@pytest.mark.parametrize(
+    "record", [b"\x00\x01", b"\x00\x00\x00\x05abc", b"\x00\x00\x00\x01\xc1"]
+)
+def test_persisted_corruption_is_not_silently_skipped(
+    log_dir: Path, record: bytes, filtered: bool
+) -> None:
+    log = DiskEventLog(log_dir)
+    archive = log_dir / "events.2026-01-01.bin.zst"
+    archive.write_bytes(zstandard.ZstdCompressor().compress(record))
+    original = archive.read_bytes()
+    try:
+        with pytest.raises(PersistedEventError, match="record 0, byte 0"):
+            list(log.iter_persisted(event_types=(TestEvent,) if filtered else None))
+        assert archive.read_bytes() == original
+    finally:
+        log.close()
+
+
+def test_unfiltered_history_still_validates_unselected_events(log_dir: Path) -> None:
+    log = DiskEventLog(log_dir)
+    payload = msgspec.msgpack.encode({"RetiredEvent": {"old_field": True}})
+    archive = log_dir / "events.2026-01-01.bin.zst"
+    archive.write_bytes(
+        zstandard.ZstdCompressor().compress(len(payload).to_bytes(4, "big") + payload)
+    )
+    event = TestEvent()
+    log.append(event)
+    try:
+        with pytest.raises(PersistedEventError) as caught:
+            list(log.iter_persisted())
+        assert isinstance(caught.value.__cause__, ValidationError)
+        assert list(log.iter_persisted(event_types=(TestEvent,))) == [event]
+        assert list(log.read_all()) == [event]
+        assert list(log.read_range(0, 1)) == [event]
+    finally:
+        log.close()
