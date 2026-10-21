@@ -242,3 +242,40 @@ def test_unfiltered_history_still_validates_unselected_events(log_dir: Path) -> 
         assert list(log.read_range(0, 1)) == [event]
     finally:
         log.close()
+
+
+def test_iter_persisted_recovers_when_archive_ends_with_truncated_trailing_record(
+    log_dir: Path,
+) -> None:
+    log = DiskEventLog(log_dir)
+    valid_event = TestEvent()
+    payload = msgspec.msgpack.encode(valid_event.model_dump(mode="json"))
+    complete_record = len(payload).to_bytes(4, "big") + payload
+    # Simulate a crash: complete record followed by a 4-byte header with no payload
+    torn_tail = complete_record + (1263).to_bytes(4, "big")
+    archive = log_dir / "events.2026-01-01.bin.zst"
+    archive.write_bytes(zstandard.ZstdCompressor().compress(torn_tail))
+
+    try:
+        events = list(log.iter_persisted(event_types=(TestEvent,)))
+        assert len(events) == 1
+        assert events[0].event_id == valid_event.event_id
+    finally:
+        log.close()
+
+
+def test_rotation_prunes_incomplete_trailing_record(log_dir: Path) -> None:
+    log_dir.mkdir(parents=True, exist_ok=True)
+    valid_event = TestEvent()
+    payload = msgspec.msgpack.encode(valid_event.model_dump(mode="json"))
+    complete_record = len(payload).to_bytes(4, "big") + payload
+    # Write a stale events.bin with a trailing 4-byte header
+    (log_dir / "events.bin").write_bytes(complete_record + (1263).to_bytes(4, "big"))
+
+    log = DiskEventLog(log_dir)
+    try:
+        events = list(log.iter_persisted(event_types=(TestEvent,)))
+        assert len(events) == 1
+        assert events[0].event_id == valid_event.event_id
+    finally:
+        log.close()

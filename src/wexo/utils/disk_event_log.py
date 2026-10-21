@@ -91,10 +91,20 @@ def _read_persisted_stream(
             if not header:
                 return
             if len(header) != _HEADER_SIZE:
+                if record > 0:
+                    logger.warning(
+                        f"Ignoring incomplete trailing record header at {location} (end of stream)"
+                    )
+                    return
                 raise PersistedEventError(f"Truncated event header at {location}")
             length = _unpack_header(header)
             payload = stream.read(length)
             if len(payload) != length:
+                if record > 0:
+                    logger.warning(
+                        f"Ignoring incomplete trailing record payload at {location} (end of stream)"
+                    )
+                    return
                 raise PersistedEventError(f"Truncated event payload at {location}")
             if allowed_tags is not None:
                 envelope = msgspec.msgpack.decode(payload, type=dict[str, object])
@@ -178,8 +188,8 @@ class DiskEventLog:
 
     def append(self, event: Event) -> None:
         packed = _serialize_event(event)
-        self._file.write(len(packed).to_bytes(_HEADER_SIZE, byteorder="big"))
-        self._file.write(packed)
+        self._file.write(len(packed).to_bytes(_HEADER_SIZE, byteorder="big") + packed)
+        self._file.flush()
         self._count += 1
 
     def read_range(self, start: int, end: int) -> Iterator[Event]:
@@ -255,6 +265,39 @@ class DiskEventLog:
             self._active_path.unlink()
 
     @staticmethod
+    def _prune_incomplete_tail(source: Path) -> int:
+        """Truncate any incomplete trailing record at EOF. Returns valid byte length."""
+        try:
+            size = source.stat().st_size
+        except OSError:
+            return 0
+        if size == 0:
+            return 0
+        offset = 0
+        try:
+            with open(source, "rb") as f:
+                while True:
+                    header = f.read(_HEADER_SIZE)
+                    if not header or len(header) < _HEADER_SIZE:
+                        break
+                    length = _unpack_header(header)
+                    f.seek(length, 1)
+                    if f.tell() != offset + _HEADER_SIZE + length:
+                        break
+                    offset += _HEADER_SIZE + length
+        except OSError:
+            return size
+
+        if 0 < offset < size:
+            logger.warning(
+                f"Pruning incomplete trailing record from {source}: {size} -> {offset} bytes"
+            )
+            with contextlib.suppress(OSError), open(source, "r+b") as f:
+                f.truncate(offset)
+            return offset
+        return size
+
+    @staticmethod
     def _rotate(source: Path, directory: Path) -> None:
         """Compress source into a timestamped archive.
 
@@ -263,6 +306,7 @@ class DiskEventLog:
         """
         try:
             stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S_%f")
+            _ = DiskEventLog._prune_incomplete_tail(source)
             dest = directory / f"events.{stamp}.bin.zst"
             compressor = zstandard.ZstdCompressor()
             with open(source, "rb") as f_in, open(dest, "wb") as f_out:
