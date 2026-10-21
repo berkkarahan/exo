@@ -42,6 +42,7 @@ tmp/models
 /.claude/skills
 /.claude
 /.codex
+/.hermes
 skills-lock.json
 .omo
 .opencode
