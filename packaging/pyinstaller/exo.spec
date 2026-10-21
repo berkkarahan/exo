@@ -6,7 +6,7 @@ import sys
 from importlib import metadata
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_all, collect_submodules
+from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_submodules
 
 PROJECT_ROOT = Path.cwd()
 SOURCE_ROOT = PROJECT_ROOT / "src"
@@ -65,6 +65,8 @@ DATAS: list[tuple[str, str]] = [
     (str(RESOURCES_DIR), "resources"),
     (str(EXO_SHARED_MODELS_DIR), "wexo/shared/models"),
 ]
+# Tinygrad enumerates runtime source files and reads compiler assets from disk.
+DATAS.extend(collect_data_files("tinygrad", include_py_files=True))
 
 BINARIES: list[tuple[str, str]] = []
 
@@ -126,7 +128,7 @@ exe = EXE(
     upx=False,
     console=sys.platform != "win32",
     icon=(
-        str(PROJECT_ROOT / "resources" / "wexo.ico") if sys.platform == "win32" else None
+        str(PROJECT_ROOT / "resources" / "exo.ico") if sys.platform == "win32" else None
     ),
     disable_windowed_traceback=False,
     argv_emulation=False,

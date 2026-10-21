@@ -343,7 +343,7 @@ def run_windows_shell(
     ]
     root = tk.Tk()
     root.withdraw()
-    icon_path = RESOURCES_DIR / "wexo.ico"
+    icon_path = RESOURCES_DIR / "exo.ico"
     _apply_window_icon(root, icon_path)
 
     commands: queue.Queue[Callable[[], None]] = queue.Queue()

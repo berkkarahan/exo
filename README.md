@@ -66,6 +66,36 @@ wexo includes a built-in dashboard for managing your cluster and chatting with m
 
 ---
 
+## Building distributables
+
+Run the build script on the target operating system and CPU architecture (these
+scripts do not cross-compile):
+
+| Platform | Command | Archive |
+| --- | --- | --- |
+| Windows | `build.bat` (or `./build.bat` in PowerShell) | `dist/wexo-<version>-windows-<arch>.zip` |
+| macOS | `bash build.sh` | `dist/wexo-<version>-macos-<arch>.tar.gz` |
+| Linux | `bash build.sh` | `dist/wexo-<version>-linux-<arch>.tar.gz` |
+
+Prerequisites: **uv**, **Node.js 22+ and npm**, and the repository's **Rust
+toolchain** must be on `PATH`. Windows also needs Visual Studio C++ Build Tools;
+macOS needs Xcode Command Line Tools and the [pinned macmon](#run-from-source-macos)
+binary. Linux needs a C/C++ compiler and the usual native build tools. Python 3.13
+is selected by uv according to `pyproject.toml`.
+
+Both scripts work from any working directory, install locked Python and dashboard
+dependencies, build the Rust bindings and dashboard, and package the runtime with
+the existing PyInstaller spec. They stop on errors and replace `dist/wexo/` and
+the current platform/version archive on reruns. Close any running copy from
+`dist/wexo/` before rebuilding, especially on Windows where loaded files are
+locked. Use `--help` for usage.
+
+Distribute the archive, not just the executable: extract it and keep the entire
+`wexo/` directory together. Launch `wexo/wexo.exe` on Windows or `./wexo/wexo` on
+macOS/Linux. Python and Node.js are not required on the destination machine;
+compatible OS libraries and GPU drivers still are. These are unsigned standalone
+runtime bundles, not Windows installers or the native macOS Swift app/DMG.
+
 ## Quick Start
 
 Devices running wexo automatically discover each other, without needing any manual configuration. Each device provides an API and a dashboard for interacting with your cluster (runs at `http://localhost:52416`).
