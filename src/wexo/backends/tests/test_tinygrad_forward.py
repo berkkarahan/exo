@@ -106,6 +106,42 @@ def test_llama_block_preserves_hidden_state_shape() -> None:
     assert embedded.shape == (1, 2, 16)
 
 
+def test_rotary_positions_handle_odd_head_dim() -> None:
+    pytest.importorskip("tinygrad")
+    from tinygrad import Tensor
+
+    from wexo.backends.tinygrad_llama import (
+        _apply_rotary_positions,  # pyright: ignore[reportPrivateUsage]
+        rotary_inverse_frequencies,
+    )
+    from wexo.backends.tinygrad_weights import TransformerArchitecture
+
+    architecture = TransformerArchitecture(
+        model_type="llama",
+        hidden_size=12,
+        num_attention_heads=4,
+        num_key_value_heads=2,
+        intermediate_size=24,
+        rms_norm_eps=1e-5,
+        rope_theta=10000.0,
+        vocab_size=20,
+        num_hidden_layers=1,
+        head_dim=3,
+        rope_scaling=None,
+        tie_word_embeddings=False,
+    )
+    inverse = rotary_inverse_frequencies(architecture)
+    assert int(inverse.shape[0]) * 2 >= architecture.resolved_head_dimension()
+
+    query_states = Tensor.randn(1, 4, 1, 3).realize()
+    key_states = Tensor.randn(1, 2, 1, 3).realize()
+    rotated_query, rotated_key = _apply_rotary_positions(
+        query_states, key_states, architecture, past_length=0
+    )
+    assert rotated_query.shape == (1, 4, 1, 3)
+    assert rotated_key.shape == (1, 2, 1, 3)
+
+
 def test_qwen3_block_preserves_hidden_state_shape() -> None:
     pytest.importorskip("tinygrad")
     from tinygrad import Tensor

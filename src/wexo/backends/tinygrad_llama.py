@@ -331,7 +331,8 @@ def _apply_rotary_positions(
     frequencies = positions.reshape(sequence_length, 1) * inverse.reshape(
         1, frequency_count
     )
-    duplicated = frequencies.cat(frequencies, dim=-1)
+    head_dimension = architecture.resolved_head_dimension()
+    duplicated = frequencies.cat(frequencies, dim=-1)[..., :head_dimension]
     cosine = duplicated.cos().reshape(1, 1, sequence_length, int(duplicated.shape[1]))
     sine = duplicated.sin().reshape(1, 1, sequence_length, int(duplicated.shape[1]))
     rotated_query = (query_states.float() * cosine) + (
