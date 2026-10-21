@@ -60,58 +60,94 @@ def repository_gguf_paths(paths: Iterable[str]) -> tuple[str, ...]:
 
 
 def choose_gguf_filename(paths: Iterable[str], preference: str | None) -> str:
-    """Pick one non-split GGUF path from a repository listing.
+    """Pick one GGUF path from a repository listing.
 
-    An explicit ``*.gguf`` preference must match one listed path. Any other
-    preference must match one file name. With no preference, a repository
-    with one file uses that file; otherwise the first unique quant token in
-    ``q4_k_m``, ``q5_k_m``, ``q6_k``, ``q8_0``, ``q4_0``, ``q3_k_m``, ``q2_k``
-    wins.
+    An explicit preference matches by exact filename, basename, or sub-token.
+    With no preference, it selects the best available quantization,
+    resolving any ambiguity and falling back to any available single or
+    split GGUF file.
 
     Raises:
-        GgufRegistrationError: Propagates through ``fetch_from_hf`` when the
-            listing has no single registrable file.
+        GgufRegistrationError: If the repository contains no GGUF files.
     """
     files = repository_gguf_paths(paths)
-    if preference is not None and preference.lower().endswith(".gguf"):
+    if not files:
+        raise GgufRegistrationError(
+            f"No GGUF files found in repository listing: {list(paths)}"
+        )
+
+    if preference is not None:
+        pref = preference.strip()
+        # Direct exact or basename match (case-insensitive fallback)
         matches = [
             path
             for path in files
-            if path == preference or PurePosixPath(path).name == preference
+            if path == pref
+            or PurePosixPath(path).name == pref
+            or path.lower() == pref.lower()
+            or PurePosixPath(path).name.lower() == pref.lower()
         ]
-        if len(matches) != 1:
-            raise GgufRegistrationError(
-                f"{preference} does not match one GGUF file in {list(files)}"
-            )
-        chosen = matches[0]
-        _reject_split(chosen)
-        return chosen
+        if matches:
+            return matches[0]
+
+        # Token match within filename
+        token_matches = [
+            path for path in files if pref.lower() in PurePosixPath(path).name.lower()
+        ]
+        if token_matches:
+            token_matches.sort(key=lambda p: (len(PurePosixPath(p).name), p))
+            return token_matches[0]
+
+        raise GgufRegistrationError(
+            f"{preference} does not match any GGUF file in {list(files)}"
+        )
 
     singles = tuple(
         path for path in files if _SPLIT_FILE.search(PurePosixPath(path).name) is None
     )
-    if not singles:
-        raise GgufRegistrationError(
-            "only split GGUF files were found; a single-file GGUF is required: "
-            f"{list(files)}"
-        )
-    if preference is not None:
-        return _unique_token_match(singles, preference.lower())
-    if len(singles) == 1:
-        return singles[0]
+    candidate_files = singles if singles else files
+
+    # 1. Try preference tokens
     for token in _QUANT_PREFERENCE:
         matched = tuple(
-            path for path in singles if token in PurePosixPath(path).name.lower()
+            path for path in candidate_files if token in PurePosixPath(path).name.lower()
         )
         if len(matched) == 1:
             return matched[0]
         if len(matched) > 1:
-            raise GgufRegistrationError(
-                f"more than one GGUF file matches {token}: {list(matched)}"
-            )
-    raise GgufRegistrationError(
-        f"repository has no single GGUF file to register: {list(files)}"
+            clean = tuple(m for m in matched if "imatrix" not in PurePosixPath(m).name.lower())
+            pool = clean if clean else matched
+            return sorted(pool, key=lambda p: (len(PurePosixPath(p).name), p))[0]
+
+    # 2. Try extended common quants
+    extended_tokens = (
+        "q4_k_s",
+        "q5_k_s",
+        "q6_k_l",
+        "q4_1",
+        "q5_0",
+        "q5_1",
+        "iq4_nl",
+        "iq4_xs",
+        "iq3_m",
+        "iq3_s",
+        "iq3_xs",
+        "iq2_m",
+        "q2_k_l",
+        "bf16",
+        "f16",
     )
+    for token in extended_tokens:
+        matched = tuple(
+            path for path in candidate_files if token in PurePosixPath(path).name.lower()
+        )
+        if matched:
+            clean = tuple(m for m in matched if "imatrix" not in PurePosixPath(m).name.lower())
+            pool = clean if clean else matched
+            return sorted(pool, key=lambda p: (len(PurePosixPath(p).name), p))[0]
+
+    # 3. Fall back to the first candidate in sorted order
+    return sorted(candidate_files)[0]
 
 
 def model_card_from_gguf_file(
@@ -337,18 +373,6 @@ async def _read_http_prefix(model_id: ModelId, repo_path: str, length: int) -> b
         return bytes(payload[:length])
 
 
-def _reject_split(repo_path: str) -> None:
-    if _SPLIT_FILE.search(PurePosixPath(repo_path).name):
-        raise GgufRegistrationError(
-            f"{repo_path} is one split of a multi-file GGUF and cannot be "
-            "registered as a single file"
-        )
-
-
-def _unique_token_match(paths: tuple[str, ...], token: str) -> str:
-    matched = tuple(path for path in paths if token in PurePosixPath(path).name.lower())
-    if len(matched) != 1:
-        raise GgufRegistrationError(
-            f"{token} does not match one GGUF file in {list(paths)}"
-        )
-    return matched[0]
+def is_split_gguf(name: str) -> bool:
+    """Return whether ``name`` matches the GGUF split-file naming pattern."""
+    return _SPLIT_FILE.search(name) is not None

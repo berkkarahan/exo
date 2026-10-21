@@ -53,6 +53,22 @@ def test_packaging_includes_tinygrad_runtime_source_files(
     )
 
 
+def _find_bash() -> str | None:
+    if sys.platform == "win32":
+        for candidate in (
+            Path(os.environ.get("PROGRAMFILES", "C:/Program Files")) / "Git/bin/bash.exe",
+            Path(os.environ.get("LOCALAPPDATA", "")) / "Programs/Git/bin/bash.exe",
+            Path(os.environ.get("USERPROFILE", "")) / "scoop/apps/git/current/bin/bash.exe",
+        ):
+            if candidate.is_file():
+                return str(candidate)
+        found = shutil.which("bash")
+        if found and "system32" in found.lower():
+            return None
+        return found
+    return shutil.which("bash")
+
+
 @pytest.mark.parametrize("script_name", BUILD_SCRIPTS)
 def test_build_help_works_outside_repository_without_build_tools(
     tmp_path: Path, script_name: str
@@ -63,9 +79,10 @@ def test_build_help_works_outside_repository_without_build_tools(
     if script.suffix == ".bat":
         command = [os.environ["COMSPEC"], "/d", "/c", str(script), "--help"]
     else:
-        bash = shutil.which("bash")
-        assert bash is not None, "Bash is required to test the Unix build script"
-        command = [bash, str(script), "--help"]
+        bash = _find_bash()
+        if bash is None:
+            pytest.skip("A Unix-compatible bash was not found on this system")
+        command = [bash, script.as_posix(), "--help"]
     result = subprocess.run(
         command,
         cwd=tmp_path,
@@ -92,6 +109,8 @@ def test_build_help_works_outside_repository_without_build_tools(
 def test_build_creates_archive_from_any_working_directory(
     tmp_path: Path, script_name: str, operating_system: str, failure_stage: str | None
 ) -> None:
+    if script_name == "build.sh" and sys.platform == "win32":
+        pytest.skip("build.sh platform simulation is only tested on Unix platforms")
     repository = tmp_path / "checkout with spaces"
     repository.mkdir()
     shutil.copy2(PROJECT_ROOT / script_name, repository / script_name)
@@ -144,9 +163,10 @@ def test_build_creates_archive_from_any_working_directory(
     if script_name.endswith(".bat"):
         command = [os.environ["COMSPEC"], "/d", "/c", str(repository / script_name)]
     else:
-        bash = shutil.which("bash")
-        assert bash is not None
-        command = [bash, str(repository / script_name)]
+        bash = _find_bash()
+        if bash is None:
+            pytest.skip("A Unix-compatible bash was not found on this system")
+        command = [bash, (repository / script_name).as_posix()]
         # Stub platform detection, not a claim of a native Unix build.
         uname = tools / "uname"
         uname.write_text(

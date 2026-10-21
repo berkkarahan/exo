@@ -255,6 +255,7 @@ class BenchChatCompletionRequest(ChatCompletionRequest):
 
 class AddCustomModelParams(BaseModel):
     model_id: ModelId
+    gguf_filename: str | None = None
 
 
 class HuggingFaceSearchResult(BaseModel):
@@ -264,6 +265,14 @@ class HuggingFaceSearchResult(BaseModel):
     likes: int = 0
     last_modified: str = ""
     tags: list[str] = Field(default_factory=list)
+    has_gguf: bool | None = None
+
+
+class GgufFileInfo(BaseModel):
+    filename: str
+    size_bytes: int = 0
+    quantization: str = ""
+    is_split: bool = False
 
 
 class PlaceInstanceParams(BaseModel):

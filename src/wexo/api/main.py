@@ -73,6 +73,7 @@ from wexo.api.types import (
     ErrorResponse,
     FinishReason,
     GenerationStats,
+    GgufFileInfo,
     HuggingFaceSearchResult,
     ImageData,
     ImageEditsTaskParams,
@@ -140,8 +141,6 @@ from wexo.shared.election import ElectionMessage
 from wexo.shared.logging import InterceptLogger
 from wexo.shared.models import model_cards
 from wexo.shared.models.catalogue import (
-    CatalogueSearch,
-    catalogue_searches,
     model_card_matches_catalogue,
 )
 from wexo.shared.models.model_cards import (
@@ -366,6 +365,8 @@ class API:
         self.app.post("/models/add")(self.add_custom_model)
         self.app.delete("/models/custom/{model_id:path}")(self.delete_custom_model)
         self.app.get("/models/search")(self.search_models)
+        self.app.get("/models/huggingface/files")(self.get_huggingface_model_files)
+        self.app.get("/models/files")(self.get_huggingface_model_files)
         self.app.post("/v1/chat/completions", response_model=None)(
             self.chat_completions
         )
@@ -1841,9 +1842,26 @@ class API:
 
     async def add_custom_model(self, payload: AddCustomModelParams) -> ModelListModel:
         """Fetch a model from HuggingFace and save as a custom model card, then sync across the cluster."""
+        model_id = payload.model_id
+        gguf_filename = payload.gguf_filename
+
+        # Support model_id string with embedded filename (e.g., "repo:file.gguf" or "repo/sub/file.gguf")
+        if not gguf_filename:
+            raw_id = str(model_id)
+            if ":" in raw_id:
+                repo_part, file_part = raw_id.split(":", 1)
+                model_id = ModelId(repo_part)
+                gguf_filename = file_part.strip()
+            elif raw_id.lower().endswith(".gguf"):
+                parts = raw_id.split("/")
+                if len(parts) > 2:
+                    model_id = ModelId(f"{parts[0]}/{parts[1]}")
+                    gguf_filename = "/".join(parts[2:])
+
         try:
-            card = await ModelCard.fetch_from_hf(payload.model_id)
+            card = await ModelCard.fetch_from_hf(model_id, gguf_filename=gguf_filename)
         except Exception as exc:
+            logger.warning(f"Failed to fetch model '{model_id}' from HuggingFace: {exc}")
             raise HTTPException(
                 status_code=400, detail=f"Failed to fetch model: {exc}"
             ) from exc
@@ -1870,6 +1888,9 @@ class API:
             supports_tensor=card.supports_tensor,
             tasks=[task.value for task in card.tasks],
             is_custom=True,
+            family=card.family,
+            quantization=card.quantization,
+            base_model=card.base_model,
         )
 
     async def delete_custom_model(self, model_id: ModelId) -> JSONResponse:
@@ -1889,68 +1910,116 @@ class API:
             {"message": "Model card deleted", "model_id": str(model_id)}
         )
 
+    async def get_huggingface_model_files(
+        self, model_id: Annotated[ModelId, Query()]
+    ) -> list[GgufFileInfo]:
+        """List GGUF files available in a Hugging Face repository."""
+        from wexo.download.download_utils import fetch_file_list_with_cache
+        from wexo.shared.models.gguf_card import is_split_gguf, repository_gguf_paths
+
+        try:
+            file_list = await fetch_file_list_with_cache(model_id, "main", recursive=True)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=400, detail=f"Failed to fetch files for {model_id}: {exc}"
+            ) from exc
+
+        gguf_paths = repository_gguf_paths(entry.path for entry in file_list if entry.type == "file")
+        size_map = {entry.path: (entry.size or 0) for entry in file_list}
+
+        results: list[GgufFileInfo] = []
+        for p in sorted(gguf_paths):
+            name = Path(p).name
+            is_split = is_split_gguf(name)
+            quant = ""
+            for q in ("q4_k_m", "q4_k_s", "q5_k_m", "q5_k_s", "q6_k", "q8_0", "q4_0", "q4_1", "q3_k_m", "q3_k_s", "q2_k", "f16", "bf16"):
+                if q in name.lower():
+                    quant = q.upper()
+                    break
+            results.append(
+                GgufFileInfo(
+                    filename=p,
+                    size_bytes=size_map.get(p, 0),
+                    quantization=quant,
+                    is_split=is_split,
+                )
+            )
+        return results
+
     async def search_models(
         self, query: str = "", limit: int = 20
     ) -> list[HuggingFaceSearchResult]:
-        """Search Hugging Face for weights the advertised backends can run.
+        """Search Hugging Face for models.
 
-        GGUF clusters search the ``gguf`` tag. This fork has no other
-        weight formats to fall back to.
+        When a query is provided, query Hugging Face models matching the query,
+        prioritizing GGUF weights. When no query is provided, return trending
+        GGUF models.
         """
         from huggingface_hub import ModelInfo, list_models
 
         def _to_results(models: Iterable[ModelInfo]) -> list[HuggingFaceSearchResult]:
-            return [
-                HuggingFaceSearchResult(
-                    id=m.id,
-                    author=m.author or "",
-                    downloads=m.downloads or 0,
-                    likes=m.likes or 0,
-                    last_modified=str(m.last_modified or ""),
-                    tags=list(m.tags or []),
+            results: list[HuggingFaceSearchResult] = []
+            for m in models:
+                tags = list(m.tags or [])
+                has_gguf = (
+                    "gguf" in tags
+                    or any(t.lower().endswith(".gguf") for t in tags)
+                    or "gguf" in (m.id or "").lower()
                 )
-                for m in models
-            ]
-
-        def _search(spec: CatalogueSearch) -> list[HuggingFaceSearchResult]:
-            if spec.huggingface_filter is None:
-                return _to_results(
-                    list_models(
-                        search=query or None,
-                        author=spec.author,
-                        sort="downloads",
-                        limit=limit,
+                results.append(
+                    HuggingFaceSearchResult(
+                        id=m.id,
+                        author=m.author or "",
+                        downloads=m.downloads or 0,
+                        likes=m.likes or 0,
+                        last_modified=str(m.last_modified or ""),
+                        tags=tags,
+                        has_gguf=has_gguf,
                     )
                 )
-            return _to_results(
-                list_models(
-                    search=query or None,
-                    filter=spec.huggingface_filter,
+            return results
+
+        clean_query = query.strip()
+        if not clean_query:
+            try:
+                models = list_models(
+                    filter="gguf",
                     sort="downloads",
                     limit=limit,
                 )
-            )
-
-        searches: tuple[CatalogueSearch, ...] = catalogue_searches(
-            self._advertised_backends()
-        )
+                return _to_results(models)
+            except Exception as e:
+                logger.warning(f"Error fetching trending models: {e}")
+                return []
 
         seen: set[str] = set()
         merged: list[HuggingFaceSearchResult] = []
-        columns = [_search(spec) for spec in searches]
-        depth = max((len(column) for column in columns), default=0)
-        for index in range(depth):
-            for column in columns:
-                if index >= len(column):
-                    continue
-                item = column[index]
-                if item.id in seen:
-                    continue
-                seen.add(item.id)
-                merged.append(item)
-                if len(merged) == limit:
-                    return merged
-        return merged
+
+        # 1. GGUF-filtered search
+        try:
+            for item in _to_results(
+                list_models(search=clean_query, filter="gguf", sort="downloads", limit=limit)
+            ):
+                if item.id not in seen:
+                    seen.add(item.id)
+                    merged.append(item)
+        except Exception as e:
+            logger.debug(f"GGUF search error for {clean_query}: {e}")
+
+        # 2. General search (any Hugging Face model)
+        try:
+            for item in _to_results(
+                list_models(search=clean_query, sort="downloads", limit=limit)
+            ):
+                if item.id not in seen:
+                    seen.add(item.id)
+                    merged.append(item)
+                    if len(merged) >= limit:
+                        break
+        except Exception as e:
+            logger.debug(f"General HF search error for {clean_query}: {e}")
+
+        return merged[:limit]
 
     async def run(self):
         shutdown_ev = anyio.Event()

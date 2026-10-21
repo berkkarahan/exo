@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import os
 import random
+import re
 import shutil
 import ssl
 import time
@@ -383,7 +384,20 @@ def is_model_directory_complete(model_dir: Path, card: ModelCard | None = None) 
         # GGUF header carries the tokenizer and architecture, so sidecars are
         # optional for the tinygrad backend.
         gguf_path = model_dir / card.gguf_filename
-        return gguf_path.is_file() and gguf_path.stat().st_size > 0
+        if not (gguf_path.is_file() and gguf_path.stat().st_size > 0):
+            return False
+        split_match = re.search(r"-(\d+)-of-(\d+)\.gguf$", card.gguf_filename, re.IGNORECASE)
+        if split_match:
+            total_splits = int(split_match.group(2))
+            digits_len = len(split_match.group(1))
+            prefix = card.gguf_filename[: split_match.start(1)]
+            suffix = card.gguf_filename[split_match.end(1) :]
+            for i in range(1, total_splits + 1):
+                split_name = f"{prefix}{str(i).zfill(digits_len)}{suffix}"
+                sp = model_dir / split_name
+                if not (sp.is_file() and sp.stat().st_size > 0):
+                    return False
+        return True
     file_list = _scan_model_directory(model_dir, recursive=True)
     if file_list is None or not all(f.size is not None for f in file_list):
         return False
@@ -891,7 +905,7 @@ async def resolve_allow_patterns(shard: ShardMetadata) -> list[str]:
     # still downloads the full tree.
     gguf_filename = shard.model_card.gguf_filename
     if gguf_filename is not None:
-        return [
+        patterns = [
             gguf_filename,
             "*.json",
             "*.jinja",
@@ -899,6 +913,14 @@ async def resolve_allow_patterns(shard: ShardMetadata) -> list[str]:
             "tokenizer.model",
             "*.tiktoken",
         ]
+        split_match = re.search(r"-\d+-of-(\d+\.gguf)$", gguf_filename, re.IGNORECASE)
+        if split_match:
+            split_wildcard = re.sub(
+                r"-\d+-of-(\d+\.gguf)$", r"-*-of-", gguf_filename, flags=re.IGNORECASE
+            )
+            if split_wildcard not in patterns:
+                patterns.append(split_wildcard)
+        return patterns
     # TODO: 'Smart' downloads are disabled because:
     #  (i) We don't handle all kinds of files;
     # (ii) We don't have sticky sessions.

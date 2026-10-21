@@ -1423,11 +1423,17 @@
     }
   }
 
-  async function addModelFromPicker(modelId: string) {
+  async function addModelFromPicker(modelId: string, ggufFilename?: string) {
+    const payload: { model_id: string; gguf_filename?: string } = {
+      model_id: modelId,
+    };
+    if (ggufFilename) {
+      payload.gguf_filename = ggufFilename;
+    }
     const response = await fetch("/models/add", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model_id: modelId }),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {

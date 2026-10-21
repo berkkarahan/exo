@@ -31,6 +31,7 @@ from wexo.utils.channels import Receiver, Sender, channel
 if sys.platform == "win32":
     import _winapi
     import io
+    import locale
     import msvcrt
     from multiprocessing.context import get_spawning_popen
 else:
@@ -395,13 +396,19 @@ if sys.platform == "win32":
             raise
 
     def _rebuild_text_stream(
-        fd: int, template: TextIO, *, line_buffered: bool
+        fd: int, template: TextIO | None, *, line_buffered: bool
     ) -> io.TextIOWrapper:
         raw = io.FileIO(fd, mode="w", closefd=False)
+        encoding = (
+            getattr(template, "encoding", None)
+            or locale.getpreferredencoding(False)
+            or "utf-8"
+        )
+        errors = getattr(template, "errors", None) or "replace"
         return io.TextIOWrapper(
             io.BufferedWriter(raw),
-            encoding=template.encoding,
-            errors=template.errors or "strict",
+            encoding=encoding,
+            errors=errors,
             newline="\n",
             line_buffering=line_buffered,
             write_through=line_buffered,
@@ -427,8 +434,9 @@ if sys.platform == "win32":
 
         old_stdout, old_stderr = sys.stdout, sys.stderr
         for old_stream in (old_stdout, old_stderr):
-            with contextlib.suppress(Exception):
-                old_stream.flush()
+            if old_stream is not None:
+                with contextlib.suppress(Exception):
+                    old_stream.flush()
 
         # A parent launched from a real console gives the child TextIOWrapper
         # streams backed by _WindowsConsoleIO, which writes via WriteConsoleW.
@@ -436,12 +444,13 @@ if sys.platform == "win32":
         # that handle and print() raises instead of being captured
         # (https://bugs.python.org/issue30555). Unconditionally rebuild
         # stdout/stderr over a generic FileIO so they can never be
-        # console-backed.
-        sys.stdout = sys.__stdout__ = _rebuild_text_stream(
-            STDOUT_FD, old_stdout, line_buffered=False
-        )
+        # console-backed. Rebuild stderr first so any error during stdout
+        # reconstruction can be written to the captured stderr pipe.
         sys.stderr = sys.__stderr__ = _rebuild_text_stream(
             STDERR_FD, old_stderr, line_buffered=True
+        )
+        sys.stdout = sys.__stdout__ = _rebuild_text_stream(
+            STDOUT_FD, old_stdout, line_buffered=False
         )
 
         faulthandler.enable(file=sys.stderr, all_threads=True)

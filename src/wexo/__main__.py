@@ -1,6 +1,18 @@
 from __future__ import annotations
 
+import os
 import sys
+
+# In PyInstaller windowed/GUI mode on Windows (console=False), standard streams
+# are None. Provide fallback devnull streams so multiprocessing bootstrap,
+# traceback printers, and third-party libraries never crash on None.write().
+if sys.platform == "win32":
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, "w", encoding="utf-8")  # noqa: SIM115
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w", encoding="utf-8")  # noqa: SIM115
+    if sys.stdin is None:
+        sys.stdin = open(os.devnull, "r", encoding="utf-8")  # noqa: SIM115
 from collections.abc import Sequence
 from multiprocessing import freeze_support
 from typing import Final

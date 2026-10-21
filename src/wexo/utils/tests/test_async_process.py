@@ -530,3 +530,21 @@ async def test_death(capsys: CaptureFixture[str]) -> None:
 
         print("CHILD out:", stdout.decode("utf-8", errors="replace"))
         print("CHILD err:", stderr.decode("utf-8", errors="replace"), "hello :)")
+
+
+if sys.platform == "win32":
+
+    def test_rebuild_text_stream_handles_none_template(tmp_path: object) -> None:
+        from pathlib import Path
+
+        from wexo.utils.async_process import _rebuild_text_stream
+        assert isinstance(tmp_path, Path)
+
+        test_file = tmp_path / "stream_test.txt"
+        with open(test_file, "w+b") as f:
+            stream = _rebuild_text_stream(f.fileno(), None, line_buffered=False)
+            assert stream.encoding is not None
+            stream.write("hello from rebuild")
+            stream.flush()
+
+        assert test_file.read_text(encoding="utf-8") == "hello from rebuild"

@@ -304,6 +304,13 @@ class ModelCard(FrozenModel):
                 model_id, file_list, preference=gguf_filename
             )
 
+        if not has_safetensors_index and not repository_gguf_paths(paths):
+            from wexo.shared.models.gguf_card import GgufRegistrationError
+
+            raise GgufRegistrationError(
+                f"Repository '{model_id}' does not contain any GGUF weights or safetensors index"
+            )
+
         # TODO: failure if files do not exist
         config_data = await fetch_config_data(model_id)
         num_layers = config_data.layer_count

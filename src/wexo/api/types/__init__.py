@@ -27,6 +27,7 @@ from .api import ErrorInfo as ErrorInfo
 from .api import ErrorResponse as ErrorResponse
 from .api import FinishReason as FinishReason
 from .api import GenerationStats as GenerationStats
+from .api import GgufFileInfo as GgufFileInfo
 from .api import HuggingFaceSearchResult as HuggingFaceSearchResult
 from .api import ImageData as ImageData
 from .api import ImageEditsTaskParams as ImageEditsTaskParams

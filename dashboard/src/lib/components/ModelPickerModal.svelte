@@ -70,7 +70,7 @@
     onSelect: (modelId: string) => void;
     onClose: () => void;
     onToggleFavorite: (baseModelId: string) => void;
-    onAddModel: (modelId: string) => Promise<void>;
+    onAddModel: (modelId: string, ggufFilename?: string) => Promise<void>;
     onDeleteModel: (modelId: string) => Promise<void>;
     totalMemoryGB: number;
     usedMemoryGB: number;
@@ -327,13 +327,13 @@
     }
   }
 
-  async function handleAddModel(modelId: string) {
+  async function handleAddModel(modelId: string, ggufFilename?: string) {
     addingModelId = modelId;
     addModelError = null;
     try {
-      await onAddModel(modelId);
+      await onAddModel(modelId, ggufFilename);
       // Success: show toast, switch to All Models, highlight the model
-      const shortName = modelId.split("/").pop() || modelId;
+      const shortName = (ggufFilename || modelId).split("/").pop() || modelId;
       addToast({ type: "success", message: `Added ${shortName}` });
       justAddedModelId = modelId;
       selectedFamily = null;
@@ -846,6 +846,7 @@
                     isAdded={existingModelIds.has(model.id)}
                     isAdding={addingModelId === model.id}
                     onAdd={() => handleAddModel(model.id)}
+                    onAddFile={(filename) => handleAddModel(model.id, filename)}
                     onSelect={() => handleSelectHfModel(model.id)}
                     downloadedOnNodes={downloadsData
                       ? getNodesWithModelDownloaded(
@@ -875,7 +876,7 @@
                 <input
                   type="text"
                   class="flex-1 bg-wEXO-black/60 border border-wEXO-yellow/30 rounded px-3 py-1.5 text-xs font-mono text-white placeholder-white/30 focus:outline-none focus:border-wEXO-yellow/50"
-                  placeholder="Or paste model ID directly..."
+                  placeholder="Or paste model ID (e.g. repo or repo:file.gguf)..."
                   bind:value={manualModelId}
                   onkeydown={(e) => {
                     if (e.key === "Enter") handleAddManualModel();
@@ -1060,6 +1061,7 @@
                   isAdded={existingModelIds.has(model.id)}
                   isAdding={addingModelId === model.id}
                   onAdd={() => handleAddModel(model.id)}
+                  onAddFile={(filename) => handleAddModel(model.id, filename)}
                   onSelect={() => handleSelectHfModel(model.id)}
                   downloadedOnNodes={downloadsData
                     ? getNodesWithModelDownloaded(downloadsData, model.id).map(

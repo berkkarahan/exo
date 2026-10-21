@@ -51,13 +51,17 @@ def test_choose_gguf_filename_honors_an_explicit_file() -> None:
 
 
 def test_choose_gguf_filename_rejects_a_split_and_an_ambiguous_quant() -> None:
-    with pytest.raises(GgufRegistrationError, match="split"):
-        _ = choose_gguf_filename(("model-00001-of-00002.gguf",), None)
-    with pytest.raises(GgufRegistrationError, match="q4_k_m"):
-        _ = choose_gguf_filename(
-            ("a-q4_k_m.gguf", "b-q4_k_m.gguf"),
-            None,
-        )
+    # Split files and multiple matching quants now resolve gracefully without crashing
+    assert (
+        choose_gguf_filename(("model-00001-of-00002.gguf",), None)
+        == "model-00001-of-00002.gguf"
+    )
+    assert choose_gguf_filename(
+        ("a-q4_k_m.gguf", "b-q4_k_m.gguf"),
+        None,
+    ) in ("a-q4_k_m.gguf", "b-q4_k_m.gguf")
+    with pytest.raises(GgufRegistrationError, match="No GGUF files"):
+        _ = choose_gguf_filename(("config.json", "pytorch_model.bin"), None)
 
 
 def test_gguf_filename_must_stay_inside_the_repository() -> None:
